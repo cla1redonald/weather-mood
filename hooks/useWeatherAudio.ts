@@ -63,6 +63,7 @@ export function useWeatherAudio(
   useEffect(() => {
     profileRef.current = soundProfile ?? null;
     if (!soundProfile || !engineRef.current || isMuted) return;
+    console.log('[audio] applyProfile', soundProfile.description, 'tone:', soundProfile.tone.frequency, soundProfile.tone.waveform);
     engineRef.current.applyProfile(soundProfile);
   }, [soundProfile, isMuted]);
 

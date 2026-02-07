@@ -88,6 +88,7 @@ function HomeContent() {
 
         if (response.ok) {
           const data = await response.json();
+          console.log('[mood]', data._source, 'bg:', data.visual?.background?.topColor, data.visual?.background?.bottomColor);
           if (!controller.signal.aborted) {
             setPoem(data.poem);
             if (data.sound) setSoundProfile(data.sound);

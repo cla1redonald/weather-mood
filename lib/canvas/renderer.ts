@@ -279,6 +279,8 @@ export function createRenderer(canvas: HTMLCanvasElement): CanvasRenderer {
       const newProfileMode = createProfileMode(config.visualProfile);
       const newProfilePalette = profileToPalette(config.visualProfile);
 
+      console.log('[renderer] profile mode ON, bg:', newProfilePalette.background.map(c => `rgb(${c[0]},${c[1]},${c[2]})`));
+
       // Capture the palette to crossfade FROM
       preCrossfadePalette = profileMode
         ? { ...profileMode.palette }
