@@ -24,7 +24,7 @@ function HomeContent() {
   const [weatherLoaded, setWeatherLoaded] = useState(false);
 
   // Audio hook (must be called unconditionally)
-  const { mute, unmute, isMuted } = useWeatherAudio(normalizedParams, condition);
+  const { mute, unmute, isMuted, startOnGesture } = useWeatherAudio(normalizedParams, condition);
 
   // Ref to track abort controller for cancelling previous requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -85,6 +85,8 @@ function HomeContent() {
           if (!controller.signal.aborted) {
             setPoem(data.poem);
           }
+        } else {
+          console.error('Poem API error:', response.status, await response.text().catch(() => ''));
         }
       } catch (error: unknown) {
         if ((error as Error)?.name !== 'AbortError') {
@@ -107,13 +109,14 @@ function HomeContent() {
     }
   }, []);
 
-  // Handle city selection
+  // Handle city selection — also auto-starts audio (user gesture)
   const handleCitySelect = useCallback(
     (city: GeoLocation) => {
       setSelectedCity(city);
+      startOnGesture(); // Resume AudioContext from this click gesture
       loadWeatherForCity(city);
     },
-    [loadWeatherForCity]
+    [loadWeatherForCity, startOnGesture]
   );
 
   // Toggle mute/unmute

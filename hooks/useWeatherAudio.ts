@@ -11,14 +11,16 @@ interface UseWeatherAudioReturn {
   unmute: () => void;
   /** Whether audio is currently muted */
   isMuted: boolean;
+  /** Start audio on user gesture (call from click handler) */
+  startOnGesture: () => void;
 }
 
 /**
  * React hook that creates and manages the weather audio engine.
  * Connects NormalizedParams + WeatherCondition to the synthesizer.
  *
- * Audio is muted by default and requires a user gesture to start
- * (handled by the unmute callback which resumes AudioContext).
+ * Audio auto-starts when startOnGesture() is called from a user gesture
+ * (e.g., city selection click). This satisfies browser autoplay policy.
  */
 export function useWeatherAudio(
   params: NormalizedParams | null,
@@ -26,6 +28,7 @@ export function useWeatherAudio(
 ): UseWeatherAudioReturn {
   const engineRef = useRef<AudioEngine | null>(null);
   const [isMuted, setIsMuted] = useState(true);
+  const hasStartedRef = useRef(false);
 
   // Create engine on mount, destroy on unmount
   useEffect(() => {
@@ -40,17 +43,31 @@ export function useWeatherAudio(
     };
   }, []);
 
-  // Track latest params so unmute can apply them
+  // Track latest params
   const paramsRef = useRef<NormalizedParams | null>(null);
   const conditionRef = useRef<WeatherCondition | null>(null);
 
-  // Update audio params when weather changes (only if already playing)
+  // Update audio params when weather changes
   useEffect(() => {
     paramsRef.current = params;
     conditionRef.current = condition;
     if (!params || !condition || !engineRef.current || isMuted) return;
     engineRef.current.update(params, condition);
   }, [params, condition, isMuted]);
+
+  // Auto-start audio from a user gesture (city click)
+  const startOnGesture = useCallback(async () => {
+    if (hasStartedRef.current) return;
+    const engine = engineRef.current;
+    if (!engine) return;
+    hasStartedRef.current = true;
+    await engine.resume();
+    if (paramsRef.current && conditionRef.current) {
+      engine.update(paramsRef.current, conditionRef.current);
+    }
+    engine.unmute();
+    setIsMuted(false);
+  }, []);
 
   const mute = useCallback(() => {
     engineRef.current?.mute();
@@ -61,7 +78,6 @@ export function useWeatherAudio(
     const engine = engineRef.current;
     if (!engine) return;
     await engine.resume();
-    // Apply current weather params before unmuting
     if (paramsRef.current && conditionRef.current) {
       engine.update(paramsRef.current, conditionRef.current);
     }
@@ -73,5 +89,6 @@ export function useWeatherAudio(
     mute,
     unmute,
     isMuted,
+    startOnGesture,
   };
 }
