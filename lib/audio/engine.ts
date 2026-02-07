@@ -23,6 +23,8 @@ export interface AudioEngine {
   unmute(): void;
   /** Whether audio is currently muted */
   isMuted(): boolean;
+  /** Set master volume (0-1) for ducking when external audio plays */
+  setMasterVolume(level: number): void;
   /** Clean up all resources */
   destroy(): void;
 }
@@ -37,6 +39,7 @@ export function createAudioEngine(): AudioEngine {
   let thunderLayer: ThunderLayer | null = null;
   let muted = true;
   let destroyed = false;
+  let volumeLevel = 1; // Master volume (0-1), ducked when external audio plays
 
   function ensureContext(): { ctx: AudioContext; masterGain: GainNode } {
     if (destroyed) throw new Error('AudioEngine has been destroyed');
@@ -108,11 +111,20 @@ export function createAudioEngine(): AudioEngine {
       const now = ctx.currentTime;
       masterGain.gain.cancelScheduledValues(now);
       masterGain.gain.setValueAtTime(masterGain.gain.value, now);
-      masterGain.gain.linearRampToValueAtTime(1, now + UNMUTE_FADE);
+      masterGain.gain.linearRampToValueAtTime(volumeLevel, now + UNMUTE_FADE);
     },
 
     isMuted() {
       return muted;
+    },
+
+    setMasterVolume(level: number) {
+      volumeLevel = Math.max(0, Math.min(1, level));
+      if (!ctx || !masterGain || muted) return;
+      const now = ctx.currentTime;
+      masterGain.gain.cancelScheduledValues(now);
+      masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+      masterGain.gain.linearRampToValueAtTime(volumeLevel, now + RAMP_DURATION);
     },
 
     destroy() {

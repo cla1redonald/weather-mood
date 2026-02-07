@@ -30,8 +30,6 @@ export default function WeatherCanvas({ condition, params, visualProfile }: Weat
     const renderer = rendererRef.current;
     if (!renderer) return;
 
-    console.log('[canvas]', renderer.isRunning() ? 'update' : 'start', 'profile:', !!visualProfile, visualProfile?.background?.topColor);
-
     if (!renderer.isRunning()) {
       renderer.start({ condition, params, visualProfile: visualProfile ?? null });
     } else {

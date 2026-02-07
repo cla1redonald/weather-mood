@@ -14,6 +14,8 @@ interface UseWeatherAudioReturn {
   isMuted: boolean;
   /** Start audio on user gesture (call from click handler) */
   startOnGesture: () => void;
+  /** Set master volume (0-1) for ducking when ElevenLabs audio plays */
+  setVolume: (level: number) => void;
 }
 
 /**
@@ -63,7 +65,6 @@ export function useWeatherAudio(
   useEffect(() => {
     profileRef.current = soundProfile ?? null;
     if (!soundProfile || !engineRef.current || isMuted) return;
-    console.log('[audio] applyProfile', soundProfile.description, 'tone:', soundProfile.tone.frequency, soundProfile.tone.waveform);
     engineRef.current.applyProfile(soundProfile);
   }, [soundProfile, isMuted]);
 
@@ -103,10 +104,20 @@ export function useWeatherAudio(
     setIsMuted(false);
   }, []);
 
+  // Duck/restore synth volume (0-1) when ElevenLabs audio plays
+  const volumeRef = useRef(1);
+  const setVolume = useCallback((level: number) => {
+    volumeRef.current = level;
+    const engine = engineRef.current;
+    if (!engine || isMuted) return;
+    engine.setMasterVolume(level);
+  }, [isMuted]);
+
   return {
     mute,
     unmute,
     isMuted,
     startOnGesture,
+    setVolume,
   };
 }

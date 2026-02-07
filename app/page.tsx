@@ -12,6 +12,10 @@ import WeatherInfo from '@/components/WeatherInfo';
 import MuteToggle from '@/components/MuteToggle';
 import PoemOverlay from '@/components/PoemOverlay';
 import { useWeatherAudio } from '@/hooks/useWeatherAudio';
+import { useElevenLabsAudio } from '@/hooks/useElevenLabsAudio';
+
+const SYNTH_DUCKED_VOLUME = 0.2;  // Synth volume when ElevenLabs audio is playing
+const SYNTH_FULL_VOLUME = 1.0;
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -26,8 +30,22 @@ function HomeContent() {
   const [isPoemLoading, setIsPoemLoading] = useState(false);
   const [weatherLoaded, setWeatherLoaded] = useState(false);
 
-  // Audio hook — parametric defaults + AI sound profile override
-  const { mute, unmute, isMuted, startOnGesture } = useWeatherAudio(normalizedParams, condition, soundProfile);
+  // Audio hooks
+  const { mute: muteSynth, unmute: unmuteSynth, isMuted: isSynthMuted, startOnGesture, setVolume: setSynthVolume } =
+    useWeatherAudio(normalizedParams, condition, soundProfile);
+  const elevenLabs = useElevenLabsAudio();
+
+  // Unified mute state (both synth and ElevenLabs mute together)
+  const isMuted = isSynthMuted;
+
+  // Duck synth when ElevenLabs audio arrives
+  useEffect(() => {
+    if (elevenLabs.hasAudio && !isMuted) {
+      setSynthVolume(SYNTH_DUCKED_VOLUME);
+    } else if (!elevenLabs.hasAudio) {
+      setSynthVolume(SYNTH_FULL_VOLUME);
+    }
+  }, [elevenLabs.hasAudio, isMuted, setSynthVolume]);
 
   // Ref to track abort controller for cancelling previous requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -88,11 +106,19 @@ function HomeContent() {
 
         if (response.ok) {
           const data = await response.json();
-          console.log('[mood]', data._source, 'bg:', data.visual?.background?.topColor, data.visual?.background?.bottomColor);
           if (!controller.signal.aborted) {
             setPoem(data.poem);
             if (data.sound) setSoundProfile(data.sound);
             if (data.visual) setVisualProfile(data.visual);
+
+            // Trigger ElevenLabs audio (music + SFX + narration) in parallel
+            elevenLabs.fetchAll({
+              city: city.name,
+              condition: weather.condition,
+              temperature: weather.temperature,
+              poem: data.poem,
+              soundDescription: data.sound?.description || '',
+            });
           }
         } else {
           console.error('Mood API error:', response.status, await response.text().catch(() => ''));
@@ -116,7 +142,7 @@ function HomeContent() {
         setIsLoadingWeather(false);
       }
     }
-  }, []);
+  }, [elevenLabs]);
 
   // Handle city selection — also auto-starts audio (user gesture)
   const handleCitySelect = useCallback(
@@ -128,14 +154,16 @@ function HomeContent() {
     [loadWeatherForCity, startOnGesture]
   );
 
-  // Toggle mute/unmute
+  // Unified mute toggle — controls both synth and ElevenLabs
   const handleToggleMute = useCallback(() => {
     if (isMuted) {
-      unmute();
+      unmuteSynth();
+      elevenLabs.unmute();
     } else {
-      mute();
+      muteSynth();
+      elevenLabs.mute();
     }
-  }, [isMuted, mute, unmute]);
+  }, [isMuted, muteSynth, unmuteSynth, elevenLabs]);
 
   // Keyboard shortcuts
   useEffect(() => {

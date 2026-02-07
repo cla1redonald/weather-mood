@@ -20,6 +20,68 @@ function getNoise(): ReturnType<typeof createNoise2D> {
   return noise2D;
 }
 
+// ── Offscreen canvas for smooth noise rendering ──────────
+
+let noiseCanvas: HTMLCanvasElement | null = null;
+let noiseCtx: CanvasRenderingContext2D | null = null;
+let noiseImageData: ImageData | null = null;
+let lastNoiseW = 0;
+let lastNoiseH = 0;
+
+const NOISE_SCALE_FACTOR = 4; // render at 1/4 resolution
+
+function drawSmoothNoise(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  noiseScale: number,
+  timeOffset: number,
+  opacity: number,
+): void {
+  const nw = Math.ceil(w / NOISE_SCALE_FACTOR);
+  const nh = Math.ceil(h / NOISE_SCALE_FACTOR);
+
+  // Create or resize offscreen canvas
+  if (!noiseCanvas || !noiseCtx || lastNoiseW !== nw || lastNoiseH !== nh) {
+    noiseCanvas = document.createElement('canvas');
+    noiseCanvas.width = nw;
+    noiseCanvas.height = nh;
+    noiseCtx = noiseCanvas.getContext('2d')!;
+    noiseImageData = noiseCtx.createImageData(nw, nh);
+    lastNoiseW = nw;
+    lastNoiseH = nh;
+  }
+
+  const noise = getNoise();
+  const data = noiseImageData!.data;
+
+  // Write noise values directly to ImageData pixels
+  for (let y = 0; y < nh; y++) {
+    for (let x = 0; x < nw; x++) {
+      const worldX = x * NOISE_SCALE_FACTOR;
+      const worldY = y * NOISE_SCALE_FACTOR;
+      const n = noise(worldX * noiseScale + timeOffset, worldY * noiseScale);
+      const brightness = Math.floor(128 + n * 80);
+      const idx = (y * nw + x) * 4;
+      data[idx] = brightness;
+      data[idx + 1] = brightness;
+      data[idx + 2] = brightness;
+      data[idx + 3] = 255;
+    }
+  }
+
+  noiseCtx!.putImageData(noiseImageData!, 0, 0);
+
+  // Draw scaled up with bilinear interpolation
+  const prevSmoothing = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'medium';
+  ctx.globalAlpha = opacity;
+  ctx.drawImage(noiseCanvas!, 0, 0, nw, nh, 0, 0, w, h);
+  ctx.globalAlpha = 1;
+  ctx.imageSmoothingEnabled = prevSmoothing;
+}
+
 // ── Mode state (persists across frames) ──────────────────
 
 interface ModeState {
@@ -55,6 +117,11 @@ export function resetModeState(): void {
     ripples: [],
   };
   noise2D = null;
+  noiseCanvas = null;
+  noiseCtx = null;
+  noiseImageData = null;
+  lastNoiseW = 0;
+  lastNoiseH = 0;
 }
 
 // ── Background renderers ─────────────────────────────────
@@ -221,19 +288,12 @@ export function drawProfileBackground(
 
   // Cloud noise overlay if active
   if (config.effects.cloudNoise.active) {
-    const noise = getNoise();
-    const scale = config.effects.cloudNoise.scale;
-    const timeScale = state.time * 0.02;
-    const opacity = config.effects.cloudNoise.opacity;
-    const step = 16;
-    for (let x = 0; x < w; x += step) {
-      for (let y = 0; y < h; y += step) {
-        const n = noise(x * scale + timeScale, y * scale);
-        const brightness = Math.floor(128 + n * 80);
-        ctx.fillStyle = `rgba(${brightness},${brightness},${brightness},${opacity})`;
-        ctx.fillRect(x, y, step, step);
-      }
-    }
+    drawSmoothNoise(
+      ctx, w, h,
+      config.effects.cloudNoise.scale,
+      state.time * 0.02,
+      config.effects.cloudNoise.opacity,
+    );
   }
 
   // Glow effect if active
@@ -433,21 +493,8 @@ function drawCloudyBackground(
   ctx.fillRect(0, 0, w, h);
 
   // Simplex noise overlay for cloud texture
-  const noise = getNoise();
-  const scale = 0.003;
-  const timeScale = state.time * 0.02;
   const opacity = 0.06 + params.cloudCover * 0.08;
-
-  // Sample at lower resolution for performance
-  const step = 16;
-  for (let x = 0; x < w; x += step) {
-    for (let y = 0; y < h; y += step) {
-      const n = noise(x * scale + timeScale, y * scale);
-      const brightness = Math.floor(128 + n * 80);
-      ctx.fillStyle = `rgba(${brightness},${brightness},${brightness},${opacity})`;
-      ctx.fillRect(x, y, step, step);
-    }
-  }
+  drawSmoothNoise(ctx, w, h, 0.003, state.time * 0.02, opacity);
 }
 
 // ── Storm ────────────────────────────────────────────────
