@@ -47,25 +47,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
   }
 
-  try {
-    const prompt = buildSfxPrompt(input);
-    const response = await elevenlabsFetch('/sound-generation', {
-      text: prompt,
-      duration_seconds: 10,
-      prompt_influence: 0.75,
-    });
+  const prompt = buildSfxPrompt(input);
+  const MAX_ATTEMPTS = 2;
 
-    return new NextResponse(response.body, {
-      headers: {
-        'Content-Type': 'audio/mpeg',
-        'X-Source': 'ai',
-      },
-    });
-  } catch (err) {
-    console.error('SFX generation error:', err);
-    return NextResponse.json(
-      { error: 'Failed to generate sound effects' },
-      { status: 500 }
-    );
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await elevenlabsFetch('/sound-generation', {
+        text: prompt,
+        duration_seconds: 10,
+        prompt_influence: 0.75,
+      });
+
+      return new NextResponse(response.body, {
+        headers: {
+          'Content-Type': 'audio/mpeg',
+          'X-Source': 'ai',
+        },
+      });
+    } catch (err) {
+      console.error(`SFX generation error (attempt ${attempt}/${MAX_ATTEMPTS}):`, err);
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+      return NextResponse.json(
+        { error: 'Failed to generate sound effects' },
+        { status: 500 }
+      );
+    }
   }
 }

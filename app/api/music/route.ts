@@ -52,26 +52,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
   }
 
-  try {
-    const prompt = buildMusicPrompt(input);
-    const response = await elevenlabsFetch('/music/stream', {
-      prompt,
-      music_length_ms: 30000,
-      force_instrumental: true,
-      model_id: 'music_v1',
-    });
+  const prompt = buildMusicPrompt(input);
+  const MAX_ATTEMPTS = 2;
 
-    return new NextResponse(response.body, {
-      headers: {
-        'Content-Type': 'audio/mpeg',
-        'X-Source': 'ai',
-      },
-    });
-  } catch (err) {
-    console.error('Music generation error:', err);
-    return NextResponse.json(
-      { error: 'Failed to generate music' },
-      { status: 500 }
-    );
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await elevenlabsFetch('/music/stream', {
+        prompt,
+        music_length_ms: 30000,
+        force_instrumental: true,
+        model_id: 'music_v1',
+      });
+
+      return new NextResponse(response.body, {
+        headers: {
+          'Content-Type': 'audio/mpeg',
+          'X-Source': 'ai',
+        },
+      });
+    } catch (err) {
+      console.error(`Music generation error (attempt ${attempt}/${MAX_ATTEMPTS}):`, err);
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(r => setTimeout(r, 1000));
+        continue;
+      }
+      return NextResponse.json(
+        { error: 'Failed to generate music' },
+        { status: 500 }
+      );
+    }
   }
 }
