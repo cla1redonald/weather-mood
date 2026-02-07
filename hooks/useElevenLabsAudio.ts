@@ -221,6 +221,7 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
             city: params.city,
             condition: params.condition,
             temperature: params.temperature,
+            soundDescription: params.soundDescription,
           }),
           signal: controller.signal,
         });

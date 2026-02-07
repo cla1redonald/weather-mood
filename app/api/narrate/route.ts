@@ -29,6 +29,30 @@ function resolveVoiceId(voice?: string): string {
   return DEFAULT_VOICE_ID;
 }
 
+// Per-voice tuning for spoken word performance quality
+// Each voice persona gets settings tuned to its character:
+//   stability: Lower = more expressive variation (good for dramatic delivery)
+//   similarity_boost: How closely to match the original voice
+//   style: Higher = more performative and dramatic
+//   speed: Varies per persona for natural delivery rhythm
+const VOICE_PERFORMANCE_SETTINGS: Record<string, {
+  stability: number;
+  similarity_boost: number;
+  style: number;
+  speed: number;
+}> = {
+  serene_female:        { stability: 0.40, similarity_boost: 0.75, style: 0.70, speed: 0.82 },
+  warm_male:            { stability: 0.45, similarity_boost: 0.80, style: 0.65, speed: 0.85 },
+  deep_male:            { stability: 0.35, similarity_boost: 0.75, style: 0.80, speed: 0.75 },  // Slow, dramatic
+  gentle_female:        { stability: 0.45, similarity_boost: 0.80, style: 0.60, speed: 0.85 },
+  contemplative_male:   { stability: 0.38, similarity_boost: 0.75, style: 0.75, speed: 0.78 },
+  ethereal_female:      { stability: 0.30, similarity_boost: 0.70, style: 0.85, speed: 0.80 },  // Most expressive variation
+  storyteller_male:     { stability: 0.35, similarity_boost: 0.80, style: 0.85, speed: 0.80 },  // Performative, dramatic pauses
+  bright_female:        { stability: 0.50, similarity_boost: 0.80, style: 0.65, speed: 0.90 },  // Slightly faster, energetic
+};
+
+const DEFAULT_PERFORMANCE_SETTINGS = { stability: 0.40, similarity_boost: 0.75, style: 0.70, speed: 0.82 };
+
 interface NarrateInput {
   poem: string;
   voice?: string;
@@ -92,14 +116,19 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Get per-voice performance tuning (or default if voice persona not found)
+    const perfSettings = (input.voice && VOICE_PERFORMANCE_SETTINGS[input.voice])
+      ? VOICE_PERFORMANCE_SETTINGS[input.voice]
+      : DEFAULT_PERFORMANCE_SETTINGS;
+
     const response = await elevenlabsFetch(`/text-to-speech/${voiceId}`, {
       text: input.poem,
       model_id: 'eleven_multilingual_v2',
       voice_settings: {
-        stability: 0.7,
-        similarity_boost: 0.8,
-        style: 0.4,
-        speed: 0.85, // Slightly slower for atmospheric delivery
+        stability: perfSettings.stability,
+        similarity_boost: perfSettings.similarity_boost,
+        style: perfSettings.style,
+        speed: perfSettings.speed,
         use_speaker_boost: true,
       },
     });
