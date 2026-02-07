@@ -9,7 +9,8 @@ import {
 } from '@/lib/poem';
 import type { PoemInput } from '@/lib/poem';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 function validateInput(body: unknown): PoemInput | null {
   if (typeof body !== 'object' || body === null) return null;

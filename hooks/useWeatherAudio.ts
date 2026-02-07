@@ -40,24 +40,33 @@ export function useWeatherAudio(
     };
   }, []);
 
-  // Update audio params when weather changes
+  // Track latest params so unmute can apply them
+  const paramsRef = useRef<NormalizedParams | null>(null);
+  const conditionRef = useRef<WeatherCondition | null>(null);
+
+  // Update audio params when weather changes (only if already playing)
   useEffect(() => {
-    if (!params || !condition || !engineRef.current) return;
+    paramsRef.current = params;
+    conditionRef.current = condition;
+    if (!params || !condition || !engineRef.current || isMuted) return;
     engineRef.current.update(params, condition);
-  }, [params, condition]);
+  }, [params, condition, isMuted]);
 
   const mute = useCallback(() => {
     engineRef.current?.mute();
     setIsMuted(true);
   }, []);
 
-  const unmute = useCallback(() => {
+  const unmute = useCallback(async () => {
     const engine = engineRef.current;
     if (!engine) return;
-    engine.resume().then(() => {
-      engine.unmute();
-      setIsMuted(false);
-    });
+    await engine.resume();
+    // Apply current weather params before unmuting
+    if (paramsRef.current && conditionRef.current) {
+      engine.update(paramsRef.current, conditionRef.current);
+    }
+    engine.unmute();
+    setIsMuted(false);
   }, []);
 
   return {
