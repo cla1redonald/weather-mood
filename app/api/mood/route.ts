@@ -289,6 +289,7 @@ export async function POST(request: NextRequest) {
       sound: cached.sound,
       visual: cached.visual,
       cached: true,
+      _source: 'cache',
     });
   }
 
@@ -297,7 +298,7 @@ export async function POST(request: NextRequest) {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: 2048,
       system: buildMoodSystemPrompt(),
       messages: [
         {
@@ -308,31 +309,37 @@ export async function POST(request: NextRequest) {
     });
 
     const textBlock = message.content.find((block) => block.type === 'text');
-    const rawText = textBlock ? textBlock.text.trim() : '';
+    let rawText = textBlock ? textBlock.text.trim() : '';
 
     if (!rawText) {
       // No response from Claude — use fallback
+      console.error('Mood generation: Empty response from Claude');
       const fallback = buildFallbackProfile(input.condition);
       return NextResponse.json({
         poem: fallback.poem,
         sound: fallback.sound,
         visual: fallback.visual,
         cached: false,
+        _source: 'fallback:empty_response',
       });
     }
+
+    // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+    rawText = rawText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
 
     let parsed: { poem?: string; sound?: Partial<SoundscapeProfile>; visual?: Partial<VisualProfile> };
     try {
       parsed = JSON.parse(rawText);
-    } catch {
+    } catch (parseError) {
       // Claude returned non-JSON — use fallback
-      console.error('Mood generation: Failed to parse JSON from Claude response');
+      console.error('Mood generation: Failed to parse JSON:', (parseError as Error).message, 'Raw:', rawText.slice(0, 200));
       const fallback = buildFallbackProfile(input.condition);
       return NextResponse.json({
         poem: fallback.poem,
         sound: fallback.sound,
         visual: fallback.visual,
         cached: false,
+        _source: 'fallback:json_parse_error',
       });
     }
 
@@ -346,7 +353,7 @@ export async function POST(request: NextRequest) {
 
     setCachedMood(cacheKey, poem, sound, visual);
 
-    return NextResponse.json({ poem, sound, visual, cached: false });
+    return NextResponse.json({ poem, sound, visual, cached: false, _source: 'ai' });
   } catch (err) {
     console.error('Mood generation error:', err);
     return NextResponse.json(

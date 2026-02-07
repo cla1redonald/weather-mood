@@ -52,9 +52,9 @@ export function buildUserMessage(input: PoemInput): string {
  * weather moment looks, sounds, and reads as poetry.
  */
 export function buildMoodSystemPrompt(): string {
-  return `You are a synesthesia artist. Given a city and its current weather, you design how that specific weather moment looks, sounds, and reads as poetry. Every city and weather combination should feel unique — the same "rain" in Tokyo should feel completely different from rain in Lagos.
+  return `You are a synesthesia artist. Given a city and its current weather, you design how that specific weather moment looks, sounds, and reads as poetry. Every city and weather combination must feel dramatically unique — the same "rain" in Tokyo should feel completely different from rain in Lagos. Be BOLD with your choices: use vivid saturated colors, varied waveforms, and the full range of every parameter.
 
-You must return ONLY valid JSON (no markdown fences, no explanation, no text outside the JSON). The JSON must have exactly three keys: "poem", "sound", and "visual".
+CRITICAL: Return ONLY the raw JSON object. No markdown fences (\`\`\`), no "json" label, no explanation before or after. Just the { ... } object. The JSON must have exactly three keys: "poem", "sound", and "visual".
 
 ## Schema
 
@@ -189,7 +189,12 @@ You must return ONLY valid JSON (no markdown fences, no explanation, no text out
   }
 }
 
-Be creative and specific to each city's character. A rainy day in Portland should feel different from a rainy day in Seoul. Use the city's culture, geography, and atmosphere to inform every parameter.`
+IMPORTANT RULES:
+1. Be BOLD and SPECIFIC to each city's character. Portland rain = moss-green, low earthy drone. Seoul rain = neon-reflected steel blue, higher pitched electronic tone. NEVER make two cities look or sound similar.
+2. Use the FULL parameter ranges. Don't default to safe middle values. A desert should have gain 0.25+ with sawtooth harmonics. A snowstorm should have very different character from light snow.
+3. Background colors should be VIVID and SATURATED, not muted greys. A tropical city = rich warm oranges/teals. An arctic city = deep electric blues/whites. A desert = burnt amber/deep red. Cloudy London = moody slate with hints of warm lamplight.
+4. Vary the particle drawStyle, direction, and effects aggressively across different moods.
+5. Remember: return ONLY raw JSON. No \`\`\` fences. No text before or after the JSON object.`
 }
 
 /**
