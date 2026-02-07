@@ -169,7 +169,21 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
           signal: controller.signal,
         });
 
-        if (!res.ok || controller.signal.aborted) return;
+        if (controller.signal.aborted) return;
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.error(`[ElevenLabs] Music API returned ${res.status}: ${errText}`);
+          return;
+        }
+
+        // Verify we got audio, not an error JSON response
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const errData = await res.json().catch(() => ({}));
+          console.error('[ElevenLabs] Music API returned JSON instead of audio:', errData);
+          return;
+        }
 
         const blob = await res.blob();
         if (controller.signal.aborted) return;
@@ -180,7 +194,11 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
         if (musicRef.current && !controller.signal.aborted) {
           musicRef.current.src = url;
           musicRef.current.volume = 0;
-          await musicRef.current.play().catch(() => {});
+          try {
+            await musicRef.current.play();
+          } catch (playErr) {
+            console.error('[ElevenLabs] Music play() failed:', playErr);
+          }
           if (!currentMuted) {
             fadeVolume(musicRef.current, MUSIC_VOLUME, MUSIC_FADE_MS);
           }
@@ -188,7 +206,7 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
         }
       } catch (err: unknown) {
         if ((err as Error)?.name !== 'AbortError') {
-          console.error('Music fetch failed:', err);
+          console.error('[ElevenLabs] Music fetch failed:', err);
         }
       }
     }
@@ -207,7 +225,21 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
           signal: controller.signal,
         });
 
-        if (!res.ok || controller.signal.aborted) return;
+        if (controller.signal.aborted) return;
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.error(`[ElevenLabs] SFX API returned ${res.status}: ${errText}`);
+          return;
+        }
+
+        // Verify we got audio, not an error JSON response
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const errData = await res.json().catch(() => ({}));
+          console.error('[ElevenLabs] SFX API returned JSON instead of audio:', errData);
+          return;
+        }
 
         const blob = await res.blob();
         if (controller.signal.aborted) return;
@@ -218,14 +250,18 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
         if (sfxRef.current && !controller.signal.aborted) {
           sfxRef.current.src = url;
           sfxRef.current.volume = 0;
-          await sfxRef.current.play().catch(() => {});
+          try {
+            await sfxRef.current.play();
+          } catch (playErr) {
+            console.error('[ElevenLabs] SFX play() failed:', playErr);
+          }
           if (!currentMuted) {
             fadeVolume(sfxRef.current, SFX_VOLUME, SFX_FADE_MS);
           }
         }
       } catch (err: unknown) {
         if ((err as Error)?.name !== 'AbortError') {
-          console.error('SFX fetch failed:', err);
+          console.error('[ElevenLabs] SFX fetch failed:', err);
         }
       }
     }
@@ -243,10 +279,29 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
           signal: controller.signal,
         });
 
-        if (!res.ok || controller.signal.aborted) return;
+        if (controller.signal.aborted) return;
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          console.error(`[ElevenLabs] Narration API returned ${res.status}: ${errText}`);
+          return;
+        }
+
+        // Verify we got audio, not an error JSON response
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const errData = await res.json().catch(() => ({}));
+          console.error('[ElevenLabs] Narration API returned JSON instead of audio:', errData);
+          return;
+        }
 
         const blob = await res.blob();
         if (controller.signal.aborted) return;
+
+        if (blob.size === 0) {
+          console.warn('[ElevenLabs] Narration response was empty (0 bytes)');
+          return;
+        }
 
         const url = URL.createObjectURL(blob);
         blobUrlsRef.current.push(url);
@@ -255,18 +310,30 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
           narrationRef.current.src = url;
           narrationRef.current.volume = 0;
 
+          // Listen for load errors on the audio element
+          narrationRef.current.onerror = () => {
+            console.error('[ElevenLabs] Narration audio element error:', narrationRef.current?.error);
+          };
+
           // Delay narration to let music establish
-          narrationTimerRef.current = setTimeout(() => {
+          narrationTimerRef.current = setTimeout(async () => {
             if (controller.signal.aborted || !narrationRef.current) return;
-            narrationRef.current.play().catch(() => {});
-            if (!currentMuted) {
-              fadeVolume(narrationRef.current!, NARRATION_VOLUME, 1000);
+            try {
+              await narrationRef.current.play();
+              if (!currentMuted) {
+                fadeVolume(narrationRef.current!, NARRATION_VOLUME, 1000);
+              }
+            } catch (playErr) {
+              console.warn(
+                '[ElevenLabs] Narration play() failed (may be autoplay policy):',
+                playErr,
+              );
             }
           }, NARRATION_DELAY_MS);
         }
       } catch (err: unknown) {
         if ((err as Error)?.name !== 'AbortError') {
-          console.error('Narration fetch failed:', err);
+          console.error('[ElevenLabs] Narration fetch failed:', err);
         }
       }
     }
@@ -290,15 +357,15 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
   const unmute = useCallback(() => {
     setIsMuted(false);
     if (musicRef.current && musicRef.current.src) {
-      musicRef.current.play().catch(() => {});
+      musicRef.current.play().catch((e) => console.error('[ElevenLabs] Music resume failed:', e));
       fadeVolume(musicRef.current, MUSIC_VOLUME, 1000);
     }
     if (sfxRef.current && sfxRef.current.src) {
-      sfxRef.current.play().catch(() => {});
+      sfxRef.current.play().catch((e) => console.error('[ElevenLabs] SFX resume failed:', e));
       fadeVolume(sfxRef.current, SFX_VOLUME, 1000);
     }
     if (narrationRef.current && narrationRef.current.src && !narrationRef.current.ended) {
-      narrationRef.current.play().catch(() => {});
+      narrationRef.current.play().catch((e) => console.warn('[ElevenLabs] Narration resume failed:', e));
       fadeVolume(narrationRef.current, NARRATION_VOLUME, 500);
     }
   }, []);

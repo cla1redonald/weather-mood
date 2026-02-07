@@ -14,7 +14,7 @@ import PoemOverlay from '@/components/PoemOverlay';
 import { useWeatherAudio } from '@/hooks/useWeatherAudio';
 import { useElevenLabsAudio } from '@/hooks/useElevenLabsAudio';
 
-const SYNTH_DUCKED_VOLUME = 0.2;  // Synth volume when ElevenLabs audio is playing
+const SYNTH_DUCKED_VOLUME = 0.05; // Synth volume when ElevenLabs audio is playing (nearly silent)
 const SYNTH_FULL_VOLUME = 1.0;
 
 function HomeContent() {

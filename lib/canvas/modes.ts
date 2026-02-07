@@ -28,7 +28,7 @@ let noiseImageData: ImageData | null = null;
 let lastNoiseW = 0;
 let lastNoiseH = 0;
 
-const NOISE_SCALE_FACTOR = 4; // render at 1/4 resolution
+const NOISE_SCALE_FACTOR = 2; // render at 1/2 resolution (was 4 — too pixelated)
 
 function drawSmoothNoise(
   ctx: CanvasRenderingContext2D,
@@ -75,7 +75,7 @@ function drawSmoothNoise(
   // Draw scaled up with bilinear interpolation
   const prevSmoothing = ctx.imageSmoothingEnabled;
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'medium';
+  ctx.imageSmoothingQuality = 'high';
   ctx.globalAlpha = opacity;
   ctx.drawImage(noiseCanvas!, 0, 0, nw, nh, 0, 0, w, h);
   ctx.globalAlpha = 1;
