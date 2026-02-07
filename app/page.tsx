@@ -29,6 +29,7 @@ function HomeContent() {
   const [loadingCity, setLoadingCity] = useState<string | null>(null);
   const [countryCode, setCountryCode] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState<string | null>(null);
+  const [languageCode, setLanguageCode] = useState<string | null>(null);
   const [weatherLoaded, setWeatherLoaded] = useState(false);
   const [isLanding, setIsLanding] = useState(true);
 
@@ -131,6 +132,7 @@ function HomeContent() {
             setLoadingCity(null);
             setPoem(data.poem);
             if (data.fontFamily) setFontFamily(data.fontFamily);
+            if (data.languageCode) setLanguageCode(data.languageCode);
             if (data.visual) setVisualProfile(data.visual);
 
             // Trigger ElevenLabs audio (music + SFX + narration) in parallel
@@ -218,7 +220,7 @@ function HomeContent() {
       <PoemOverlay poem={poem} weatherLoaded={weatherLoaded} isTransitioning={isTransitioning} fontFamily={fontFamily} />
 
       {/* Layer 5: UI Controls (z-20+) */}
-      <WeatherInfo weather={weatherData} isLoading={isLoadingWeather} countryCode={countryCode} />
+      <WeatherInfo weather={weatherData} isLoading={isLoadingWeather} countryCode={countryCode} languageCode={languageCode} />
       <CitySearch onCitySelect={handleCitySelect} onRandomCity={handleCitySelect} defaultCity={defaultCity} />
       <MuteToggle isMuted={isMuted} onToggle={handleToggleMute} />
     </main>
