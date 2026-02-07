@@ -494,20 +494,17 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
 
           if (!res.ok) {
             const errText = await res.text().catch(() => '');
-            console.error(
-              `[ElevenLabs] SFX API returned ${res.status}: ${errText}`,
+            console.warn(
+              `[ElevenLabs] SFX unavailable (${res.status}) — music and narration still playing`,
             );
+            if (errText) console.debug('[ElevenLabs] SFX detail:', errText);
             return;
           }
 
           // Verify we got audio, not an error JSON response
           const contentType = res.headers.get('content-type') || '';
           if (contentType.includes('application/json')) {
-            const errData = await res.json().catch(() => ({}));
-            console.error(
-              '[ElevenLabs] SFX API returned JSON instead of audio:',
-              errData,
-            );
+            console.warn('[ElevenLabs] SFX unavailable — music and narration still playing');
             return;
           }
 
@@ -565,7 +562,7 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
           }
         } catch (err: unknown) {
           if ((err as Error)?.name !== 'AbortError') {
-            console.error('[ElevenLabs] SFX fetch failed:', err);
+            console.warn('[ElevenLabs] SFX unavailable — music and narration still playing');
           }
         }
       }
