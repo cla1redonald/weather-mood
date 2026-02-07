@@ -28,11 +28,16 @@ export default function MuteToggle({ isMuted, onToggle }: MuteToggleProps) {
       className={[
         'fixed bottom-6 right-6 z-20 w-11 h-11',
         'flex items-center justify-center',
-        'bg-white/10 backdrop-blur-md border border-white/20 rounded-full',
-        'hover:bg-white/20 transition-all duration-300',
+        'backdrop-blur-xl rounded-full',
+        'transition-all duration-300',
         'group',
-        showHint && isMuted ? 'animate-pulse' : '',
       ].join(' ')}
+      style={{
+        background: 'rgba(12, 10, 38, 0.4)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        boxShadow: showHint && isMuted ? undefined : '0 4px 16px rgba(0, 0, 0, 0.2)',
+        animation: showHint && isMuted ? 'mute-glow-hint 2.5s ease-in-out infinite' : undefined,
+      }}
       aria-label={isMuted ? 'Unmute audio' : 'Mute audio'}
     >
       {isMuted ? (

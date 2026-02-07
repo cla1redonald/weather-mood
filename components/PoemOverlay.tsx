@@ -115,18 +115,23 @@ export default function PoemOverlay({ poem, weatherLoaded, isTransitioning, font
       className={[
         'fixed bottom-12 left-1/2 -translate-x-1/2 z-10',
         'max-w-[480px] w-[calc(100%-2rem)] min-h-[180px]',
-        'bg-black/30 backdrop-blur-lg rounded-xl',
+        'backdrop-blur-xl rounded-2xl',
         'px-8 py-6',
         'transition-opacity ease-in',
         opacityClass,
       ].join(' ')}
-      style={{ transitionDuration: `${transitionMs}ms` }}
+      style={{
+        transitionDuration: `${transitionMs}ms`,
+        background: 'linear-gradient(135deg, rgba(12, 10, 38, 0.45) 0%, rgba(28, 18, 52, 0.35) 100%)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+      }}
       role="complementary"
       aria-label="Weather poem"
     >
       <p
         className="text-white/90 text-center leading-[1.8] whitespace-pre-line"
-        style={fontStyle}
+        style={{ ...fontStyle, textShadow: '0 0 30px rgba(120, 90, 180, 0.2)' }}
       >
         {displayedPoem}
       </p>

@@ -66,13 +66,16 @@ export default function WeatherInfo({ weather, isLoading, countryCode }: Weather
 
   return (
     <div
-      className="fixed top-6 left-6 z-20 transition-opacity duration-300 opacity-0 animate-fade-in"
+      className="fixed top-6 left-6 z-20 opacity-0"
+      style={{
+        animation: 'fade-in 1.2s ease-out 500ms both',
+      }}
       role="status"
       aria-live="polite"
       aria-label={`Current weather: ${Math.round(weather.temperature)} degrees Celsius, ${conditionLabel}`}
     >
-      <div className="text-white text-shadow-lg">
-        <div className="text-3xl md:text-4xl font-light opacity-80">
+      <div className="text-white" style={{ textShadow: '0 0 30px rgba(120, 90, 180, 0.25), 0 2px 8px rgba(0, 0, 0, 0.4)' }}>
+        <div className="text-3xl md:text-4xl font-light opacity-80" style={{ letterSpacing: '0.04em' }}>
           {flag && <span className="mr-2">{flag}</span>}
           {Math.round(weather.temperature)}°C
         </div>

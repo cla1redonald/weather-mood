@@ -12,7 +12,10 @@ import WeatherInfo from '@/components/WeatherInfo';
 import MuteToggle from '@/components/MuteToggle';
 import PoemOverlay from '@/components/PoemOverlay';
 import LoadingOverlay from '@/components/LoadingOverlay';
+import LandingOverlay from '@/components/LandingOverlay';
 import { useElevenLabsAudio } from '@/hooks/useElevenLabsAudio';
+import { useLandingAudio } from '@/hooks/useLandingAudio';
+import { LANDING_VISUAL_PROFILE } from '@/lib/canvas/landingProfile';
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -27,10 +30,35 @@ function HomeContent() {
   const [countryCode, setCountryCode] = useState<string | null>(null);
   const [fontFamily, setFontFamily] = useState<string | null>(null);
   const [weatherLoaded, setWeatherLoaded] = useState(false);
+  const [isLanding, setIsLanding] = useState(true);
 
   // Audio — ElevenLabs only (synth removed)
   const elevenLabs = useElevenLabsAudio();
   const isMuted = elevenLabs.isMuted;
+
+  // Landing ambient audio
+  const landingAudio = useLandingAudio();
+  const landingAudioStartedRef = useRef(false);
+
+  // Start landing audio on first user gesture (respects autoplay policy)
+  useEffect(() => {
+    if (!isLanding) return;
+
+    const handleGesture = () => {
+      if (!landingAudioStartedRef.current) {
+        landingAudioStartedRef.current = true;
+        landingAudio.startAudio();
+      }
+    };
+
+    document.addEventListener('click', handleGesture, { once: true });
+    document.addEventListener('keydown', handleGesture, { once: true });
+
+    return () => {
+      document.removeEventListener('click', handleGesture);
+      document.removeEventListener('keydown', handleGesture);
+    };
+  }, [isLanding, landingAudio]);
 
   // Ref to track abort controller for cancelling previous requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -45,6 +73,10 @@ function HomeContent() {
     // Create new abort controller for this request
     const controller = new AbortController();
     abortControllerRef.current = controller;
+
+    // Exit landing state and fade out landing audio
+    setIsLanding(false);
+    landingAudio.fadeOut();
 
     setIsLoadingWeather(true);
     setIsTransitioning(true);
@@ -103,7 +135,9 @@ function HomeContent() {
             // Trigger ElevenLabs audio (music + SFX + narration) in parallel
             elevenLabs.fetchAll({
               poem: data.poem,
+              poemLocal: data.poemLocal || data.poem,
               voice: data.voice,
+              languageCode: data.languageCode || undefined,
               musicDirection: data.musicDirection || '',
               ambienceDirection: data.ambienceDirection || '',
             });
@@ -147,6 +181,9 @@ function HomeContent() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore when typing in an input (e.g. city search)
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (e.key === 'm' || e.key === 'M') {
         handleToggleMute();
       }
@@ -161,16 +198,25 @@ function HomeContent() {
 
   return (
     <main className="fixed inset-0 w-screen h-screen overflow-hidden bg-black">
-      {/* Layer 1: Canvas (z-0) */}
-      <WeatherCanvas condition={condition} params={normalizedParams} visualProfile={visualProfile} isAudioLoading={elevenLabs.isLoading} isTransitioning={isTransitioning} />
+      {/* Layer 1: Canvas (z-0) — shows landing profile until city loads */}
+      <WeatherCanvas
+        condition={condition}
+        params={normalizedParams}
+        visualProfile={visualProfile ?? ((isLanding || isTransitioning) ? LANDING_VISUAL_PROFILE : null)}
+        isAudioLoading={elevenLabs.isLoading}
+        isTransitioning={isTransitioning}
+      />
 
-      {/* Layer 2: Loading Overlay (z-10) — prominent centered indicator */}
+      {/* Layer 2: Landing Overlay (z-10) — title + tagline */}
+      <LandingOverlay isVisible={isLanding && !isTransitioning} />
+
+      {/* Layer 3: Loading Overlay (z-10) — prominent centered indicator */}
       <LoadingOverlay cityName={loadingCity} isVisible={isTransitioning} />
 
-      {/* Layer 3: Poem Overlay (z-10) */}
+      {/* Layer 4: Poem Overlay (z-10) */}
       <PoemOverlay poem={poem} weatherLoaded={weatherLoaded} isTransitioning={isTransitioning} fontFamily={fontFamily} />
 
-      {/* Layer 4: UI Controls (z-20+) */}
+      {/* Layer 5: UI Controls (z-20+) */}
       <WeatherInfo weather={weatherData} isLoading={isLoadingWeather} countryCode={countryCode} />
       <CitySearch onCitySelect={handleCitySelect} defaultCity={defaultCity} />
       <MuteToggle isMuted={isMuted} onToggle={handleToggleMute} />

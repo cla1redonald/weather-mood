@@ -56,17 +56,19 @@ const DEFAULT_PERFORMANCE_SETTINGS = { stability: 0.40, similarity_boost: 0.75, 
 interface NarrateInput {
   poem: string;
   voice?: string;
+  languageCode?: string;
 }
 
 function validateInput(body: unknown): NarrateInput | null {
   if (typeof body !== 'object' || body === null) return null;
-  const { poem, voice } = body as Record<string, unknown>;
+  const { poem, voice, languageCode } = body as Record<string, unknown>;
 
   if (typeof poem !== 'string' || !poem.trim()) return null;
 
   return {
     poem: poem.trim(),
     voice: typeof voice === 'string' ? voice : undefined,
+    languageCode: typeof languageCode === 'string' && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(languageCode) ? languageCode : undefined,
   };
 }
 
@@ -103,8 +105,8 @@ export async function POST(request: NextRequest) {
 
   const voiceId = resolveVoiceId(input.voice);
 
-  // Check cache (include voice in key so different voices are cached separately)
-  const cacheKey = audioCacheKey('narrate', `${hashPoem(input.poem)}_${voiceId}`);
+  // Check cache (include voice + language in key so different voices/accents are cached separately)
+  const cacheKey = audioCacheKey('narrate', `${hashPoem(input.poem)}_${voiceId}_${input.languageCode || 'default'}`);
   const cached = getCachedAudio(cacheKey);
   if (cached) {
     return new NextResponse(cached, {
@@ -124,6 +126,14 @@ export async function POST(request: NextRequest) {
     const response = await elevenlabsFetch(`/text-to-speech/${voiceId}`, {
       text: input.poem,
       model_id: 'eleven_multilingual_v2',
+      // Only send language_code for non-English locales.
+      // Strip region subtags (e.g. 'pt-BR' → 'pt') — ElevenLabs rejects them.
+      ...(() => {
+        if (!input.languageCode) return {};
+        const base = input.languageCode.split('-')[0];
+        if (base === 'en') return {}; // English is the default, omitting lets model use natural voice
+        return { language_code: base };
+      })(),
       voice_settings: {
         stability: perfSettings.stability,
         similarity_boost: perfSettings.similarity_boost,

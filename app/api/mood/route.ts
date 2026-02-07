@@ -270,9 +270,11 @@ export async function POST(request: NextRequest) {
       const fallback = buildFallbackProfile(input.condition);
       return NextResponse.json({
         poem: fallback.poem,
+        poemLocal: fallback.poem,
         visual: fallback.visual,
         voice: fallback.voice,
         fontFamily: 'Lora',
+        languageCode: 'en',
         musicDirection: fallback.musicDirection,
         ambienceDirection: fallback.ambienceDirection,
         cached: false,
@@ -283,7 +285,7 @@ export async function POST(request: NextRequest) {
     // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
     rawText = rawText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
 
-    let parsed: { poem?: string; visual?: Partial<VisualProfile>; voice?: string; fontFamily?: string; musicDirection?: string; ambienceDirection?: string };
+    let parsed: { poem?: string; poemLocal?: string; visual?: Partial<VisualProfile>; voice?: string; fontFamily?: string; languageCode?: string; musicDirection?: string; ambienceDirection?: string };
     try {
       parsed = JSON.parse(rawText);
     } catch (parseError) {
@@ -292,9 +294,11 @@ export async function POST(request: NextRequest) {
       const fallback = buildFallbackProfile(input.condition);
       return NextResponse.json({
         poem: fallback.poem,
+        poemLocal: fallback.poem,
         visual: fallback.visual,
         voice: fallback.voice,
         fontFamily: 'Lora',
+        languageCode: 'en',
         musicDirection: fallback.musicDirection,
         ambienceDirection: fallback.ambienceDirection,
         cached: false,
@@ -309,9 +313,17 @@ export async function POST(request: NextRequest) {
         ? parsed.poem.trim()
         : fallback.poem;
 
+    const poemLocal =
+      typeof parsed.poemLocal === 'string' && parsed.poemLocal.trim().length > 0
+        ? parsed.poemLocal.trim()
+        : poem; // Fall back to English poem if no local version
+
     const visual = clampVisualProfile(parsed.visual ?? {});
     const voice = validateVoicePersona(parsed.voice);
     const fontFamily = validateFont(parsed.fontFamily);
+    const languageCode = typeof parsed.languageCode === 'string' && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(parsed.languageCode.trim())
+      ? parsed.languageCode.trim()
+      : 'en';
     const musicDirection = typeof parsed.musicDirection === 'string' && parsed.musicDirection.trim().length > 0
       ? parsed.musicDirection.trim()
       : fallback.musicDirection;
@@ -319,7 +331,7 @@ export async function POST(request: NextRequest) {
       ? parsed.ambienceDirection.trim()
       : fallback.ambienceDirection;
 
-    return NextResponse.json({ poem, visual, voice, fontFamily, musicDirection, ambienceDirection, cached: false, _source: 'ai' });
+    return NextResponse.json({ poem, poemLocal, visual, voice, fontFamily, languageCode, musicDirection, ambienceDirection, cached: false, _source: 'ai' });
   } catch (err) {
     console.error('Mood generation error:', err);
     return NextResponse.json(

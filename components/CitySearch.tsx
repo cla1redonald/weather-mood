@@ -161,17 +161,30 @@ export default function CitySearch({ onCitySelect, defaultCity }: CitySearchProp
             autoFocus
             className={[
               'w-full px-6 py-3 rounded-full',
-              'bg-white/10 backdrop-blur-md border border-white/20',
+              'backdrop-blur-xl',
               'text-white placeholder-white/50',
-              'focus:outline-none focus:border-white/40',
+              'focus:outline-none',
               'transition-all duration-300',
-              error ? 'border-red-400/60' : '',
             ].join(' ')}
+            style={{
+              background: 'rgba(12, 10, 38, 0.4)',
+              borderWidth: '1px',
+              borderStyle: 'solid',
+              borderColor: error ? 'rgba(248, 113, 113, 0.6)' : 'rgba(255, 255, 255, 0.1)',
+              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
+            }}
           />
 
           {/* Suggestions dropdown */}
           {suggestions.length > 0 && (
-            <div className="absolute top-full mt-2 w-full bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl overflow-hidden">
+            <div
+              className="absolute top-full mt-2 w-full backdrop-blur-xl rounded-2xl overflow-hidden"
+              style={{
+                background: 'rgba(12, 10, 38, 0.5)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              }}
+            >
               {suggestions.map((city, index) => (
                 <button
                   key={`${city.name}-${city.country}-${index}`}
@@ -206,19 +219,22 @@ export default function CitySearch({ onCitySelect, defaultCity }: CitySearchProp
       ) : (
         <button
           onClick={handleExpand}
-          className="w-full px-6 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white text-center hover:bg-white/20 transition-all duration-300 truncate"
+          className="w-full px-6 py-3 rounded-full backdrop-blur-xl text-white text-center transition-all duration-300 truncate"
+          style={{
+            background: 'rgba(12, 10, 38, 0.4)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
+            fontFamily: '"Cormorant Garamond", Georgia, serif',
+            fontWeight: 300,
+            letterSpacing: '0.06em',
+            fontSize: '1.1rem',
+          }}
           title={`${selectedCity.name}, ${selectedCity.country}`}
         >
           <span className="truncate">
             {selectedCity.name}, {selectedCity.country}
           </span>
         </button>
-      )}
-
-      {!selectedCity && !query && (
-        <div className="mt-4 text-center text-white/60 text-sm animate-fade-in">
-          Enter a city to feel the weather
-        </div>
       )}
 
       {!selectedCity && query && !isLoading && suggestions.length === 0 && !error && (

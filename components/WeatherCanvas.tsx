@@ -23,6 +23,24 @@ export default function WeatherCanvas({ condition, params, visualProfile, isAudi
     rendererRef.current = createRenderer(canvasRef.current);
   }, []);
 
+  // Landing state: start renderer with landing profile before any weather data
+  useEffect(() => {
+    if (condition || params) return;   // Weather data exists, skip landing
+    if (!visualProfile) return;        // No landing profile provided
+
+    initRenderer();
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+
+    if (!renderer.isRunning()) {
+      renderer.start({
+        condition: 'clear',  // Dummy — ignored when visualProfile is set
+        params: { temperature: 0.5, humidity: 0.5, windSpeed: 0, cloudCover: 0 },
+        visualProfile,
+      });
+    }
+  }, [visualProfile, condition, params, initRenderer]);
+
   // Start or update renderer when weather data changes
   useEffect(() => {
     if (!condition || !params) return;
@@ -60,8 +78,8 @@ export default function WeatherCanvas({ condition, params, visualProfile, isAudi
           className="fixed inset-0 pointer-events-none"
           style={{
             zIndex: 1,
-            animation: 'pulse-overlay 2s ease-in-out infinite',
-            background: 'radial-gradient(circle at center, rgba(255,255,255,0.12) 0%, transparent 60%)',
+            animation: 'pulse-overlay 2.5s ease-in-out infinite',
+            background: 'radial-gradient(circle at center, rgba(120, 90, 180, 0.08) 0%, transparent 60%)',
           }}
           aria-hidden="true"
         />

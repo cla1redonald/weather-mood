@@ -4,7 +4,9 @@ import { useRef, useCallback, useState, useEffect } from 'react';
 
 interface FetchAllParams {
   poem: string;
+  poemLocal?: string;
   voice?: string;
+  languageCode?: string;
   musicDirection: string;
   ambienceDirection: string;
 }
@@ -575,8 +577,9 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              poem: params.poem,
+              poem: params.poemLocal || params.poem,
               voice: params.voice,
+              languageCode: params.languageCode,
             }),
             signal: controller.signal,
           });
