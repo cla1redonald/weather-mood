@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { GeoLocation, WeatherData, NormalizedParams, WeatherCondition } from '@/types/weather';
+import type { SoundscapeProfile, VisualProfile } from '@/types/mood';
 import { fetchWeather } from '@/lib/weather/api';
 import { normalizeParams } from '@/lib/weather/params';
 import WeatherCanvas from '@/components/WeatherCanvas';
@@ -19,12 +20,14 @@ function HomeContent() {
   const [normalizedParams, setNormalizedParams] = useState<NormalizedParams | null>(null);
   const [condition, setCondition] = useState<WeatherCondition | null>(null);
   const [poem, setPoem] = useState<string | null>(null);
+  const [soundProfile, setSoundProfile] = useState<SoundscapeProfile | null>(null);
+  const [visualProfile, setVisualProfile] = useState<VisualProfile | null>(null);
   const [isLoadingWeather, setIsLoadingWeather] = useState(false);
   const [isPoemLoading, setIsPoemLoading] = useState(false);
   const [weatherLoaded, setWeatherLoaded] = useState(false);
 
-  // Audio hook (must be called unconditionally)
-  const { mute, unmute, isMuted, startOnGesture } = useWeatherAudio(normalizedParams, condition);
+  // Audio hook — parametric defaults + AI sound profile override
+  const { mute, unmute, isMuted, startOnGesture } = useWeatherAudio(normalizedParams, condition, soundProfile);
 
   // Ref to track abort controller for cancelling previous requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -43,6 +46,8 @@ function HomeContent() {
     setIsLoadingWeather(true);
     setWeatherLoaded(false);
     setPoem(null); // Fade out old poem immediately
+    setSoundProfile(null); // Clear old profiles
+    setVisualProfile(null);
 
     try {
       const weather = await fetchWeather(city.latitude, city.longitude);
@@ -64,10 +69,10 @@ function HomeContent() {
       url.searchParams.set('city', city.name);
       window.history.pushState({}, '', url);
 
-      // Fetch poem
+      // Fetch mood (poem + sound profile + visual profile)
       setIsPoemLoading(true);
       try {
-        const response = await fetch('/api/poem', {
+        const response = await fetch('/api/mood', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -76,6 +81,7 @@ function HomeContent() {
             condition: weather.condition,
             humidity: weather.humidity,
             windSpeed: weather.windSpeed,
+            cloudCover: weather.cloudCover,
           }),
           signal: controller.signal,
         });
@@ -84,15 +90,17 @@ function HomeContent() {
           const data = await response.json();
           if (!controller.signal.aborted) {
             setPoem(data.poem);
+            if (data.sound) setSoundProfile(data.sound);
+            if (data.visual) setVisualProfile(data.visual);
           }
         } else {
-          console.error('Poem API error:', response.status, await response.text().catch(() => ''));
+          console.error('Mood API error:', response.status, await response.text().catch(() => ''));
         }
       } catch (error: unknown) {
         if ((error as Error)?.name !== 'AbortError') {
-          console.error('Failed to fetch poem:', error);
+          console.error('Failed to fetch mood:', error);
         }
-        // Silently fail - visuals and audio still work
+        // Silently fail - parametric visuals and audio still work
       } finally {
         if (!controller.signal.aborted) {
           setIsPoemLoading(false);
@@ -146,7 +154,7 @@ function HomeContent() {
   return (
     <main className="fixed inset-0 w-screen h-screen overflow-hidden bg-black">
       {/* Layer 1: Canvas (z-0) */}
-      <WeatherCanvas condition={condition} params={normalizedParams} />
+      <WeatherCanvas condition={condition} params={normalizedParams} visualProfile={visualProfile} />
 
       {/* Layer 2: Poem Overlay (z-10) */}
       <PoemOverlay poem={poem} weatherLoaded={weatherLoaded} />

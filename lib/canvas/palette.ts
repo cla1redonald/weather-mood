@@ -1,4 +1,5 @@
 import type { NormalizedParams } from '@/types/weather';
+import type { VisualProfile, RGB } from '@/types/mood';
 
 /**
  * Color represented as [r, g, b, a] with each channel 0-255, alpha 0-1
@@ -106,6 +107,27 @@ const PALETTES: Record<string, WeatherPalette> = {
 
 export function getPalette(condition: string): WeatherPalette {
   return PALETTES[condition] ?? CLEAR_PALETTE;
+}
+
+// ── Profile conversion ───────────────────────────────────
+
+/**
+ * Convert an AI-generated VisualProfile to the existing ColorPalette format.
+ * Maps profile colors (RGB) to RGBA with default alphas.
+ */
+export function profileToPalette(visual: VisualProfile): WeatherPalette {
+  const rgbToRGBA = (rgb: RGB, alpha: number): RGBA =>
+    [rgb[0], rgb[1], rgb[2], alpha];
+
+  return {
+    background: [
+      rgbToRGBA(visual.background.topColor, 1),
+      rgbToRGBA(visual.background.bottomColor, 1),
+    ],
+    particles: visual.particles.colors.map((c, i) =>
+      rgbToRGBA(c, visual.particles.alphaRange[0] + (visual.particles.alphaRange[1] - visual.particles.alphaRange[0]) * (i / 3))
+    ),
+  };
 }
 
 // ── Color interpolation ──────────────────────────────────

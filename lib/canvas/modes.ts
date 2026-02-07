@@ -1,10 +1,12 @@
 import { createNoise2D } from 'simplex-noise';
 import type { WeatherCondition, NormalizedParams } from '@/types/weather';
+import type { VisualProfile } from '@/types/mood';
 import {
   type WeatherPalette,
   buildBackgroundGradient,
   rgbaToString,
   lerpColor,
+  profileToPalette,
   type RGBA,
 } from './palette';
 
@@ -112,6 +114,200 @@ export function drawForeground(
     case 'storm':
       drawLightningFlash(ctx, w, h, dt);
       break;
+  }
+}
+
+// ── Profile-driven mode ──────────────────────────────────
+
+/**
+ * Configuration generated from a VisualProfile that controls
+ * background rendering, particle spawning, and foreground effects.
+ */
+export interface ProfileModeConfig {
+  backgroundStyle: 'linear' | 'radial';
+  palette: WeatherPalette;
+  spawnRate: number;
+  sizeRange: [number, number];
+  alphaRange: [number, number];
+  speedRange: [number, number];
+  direction: 'down' | 'up' | 'left' | 'right' | 'random';
+  lifespan: [number, number];
+  maxCount: number;
+  drawStyle: 'circle' | 'line' | 'glow' | 'trail';
+  effects: {
+    ripples: { active: boolean; color: RGBA; rate: number };
+    lightning: { active: boolean; interval: [number, number] };
+    cloudNoise: { active: boolean; opacity: number; scale: number };
+    glow: { active: boolean; color: RGBA; intensity: number };
+  };
+}
+
+/**
+ * Create a mode config from an AI-generated VisualProfile.
+ * This bypasses condition-based mode selection entirely.
+ */
+export function createProfileMode(visual: VisualProfile): ProfileModeConfig {
+  const palette = profileToPalette(visual);
+  const rgbToRGBA = (rgb: [number, number, number], alpha: number): RGBA =>
+    [rgb[0], rgb[1], rgb[2], alpha];
+
+  return {
+    backgroundStyle: visual.background.style,
+    palette,
+    spawnRate: visual.particles.spawnRate,
+    sizeRange: visual.particles.sizeRange,
+    alphaRange: visual.particles.alphaRange,
+    speedRange: visual.particles.speedRange,
+    direction: visual.particles.direction,
+    lifespan: visual.particles.lifespan,
+    maxCount: visual.particles.maxCount,
+    drawStyle: visual.particles.drawStyle,
+    effects: {
+      ripples: {
+        active: visual.effects.ripples.active,
+        color: rgbToRGBA(visual.effects.ripples.color, 0.4),
+        rate: visual.effects.ripples.rate,
+      },
+      lightning: {
+        active: visual.effects.lightning.active,
+        interval: visual.effects.lightning.interval,
+      },
+      cloudNoise: {
+        active: visual.effects.cloudNoise.active,
+        opacity: visual.effects.cloudNoise.opacity,
+        scale: visual.effects.cloudNoise.scale,
+      },
+      glow: {
+        active: visual.effects.glow.active,
+        color: rgbToRGBA(visual.effects.glow.color, visual.effects.glow.intensity),
+        intensity: visual.effects.glow.intensity,
+      },
+    },
+  };
+}
+
+/**
+ * Draw background using a profile mode config instead of condition-based logic.
+ */
+export function drawProfileBackground(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  config: ProfileModeConfig,
+  params: NormalizedParams,
+  dt: number,
+): void {
+  state.time += dt;
+  const bg = config.palette.background;
+  const topColor = rgbaToString(bg[0]);
+  const bottomColor = rgbaToString(bg[1] ?? bg[0]);
+
+  if (config.backgroundStyle === 'radial') {
+    const cx = w / 2;
+    const cy = h * 0.4;
+    const maxRadius = Math.max(w, h) * 0.8;
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxRadius);
+    gradient.addColorStop(0, topColor);
+    gradient.addColorStop(1, bottomColor);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  } else {
+    const gradient = ctx.createLinearGradient(0, 0, 0, h);
+    gradient.addColorStop(0, topColor);
+    gradient.addColorStop(1, bottomColor);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  // Cloud noise overlay if active
+  if (config.effects.cloudNoise.active) {
+    const noise = getNoise();
+    const scale = config.effects.cloudNoise.scale;
+    const timeScale = state.time * 0.02;
+    const opacity = config.effects.cloudNoise.opacity;
+    const step = 16;
+    for (let x = 0; x < w; x += step) {
+      for (let y = 0; y < h; y += step) {
+        const n = noise(x * scale + timeScale, y * scale);
+        const brightness = Math.floor(128 + n * 80);
+        ctx.fillStyle = `rgba(${brightness},${brightness},${brightness},${opacity})`;
+        ctx.fillRect(x, y, step, step);
+      }
+    }
+  }
+
+  // Glow effect if active
+  if (config.effects.glow.active) {
+    const gc = config.effects.glow.color;
+    const intensity = config.effects.glow.intensity;
+    const glowGradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.6);
+    glowGradient.addColorStop(0, `rgba(${gc[0]},${gc[1]},${gc[2]},${intensity * 0.3})`);
+    glowGradient.addColorStop(1, `rgba(${gc[0]},${gc[1]},${gc[2]},0)`);
+    ctx.fillStyle = glowGradient;
+    ctx.fillRect(0, 0, w, h);
+  }
+}
+
+/**
+ * Draw foreground effects using a profile mode config.
+ */
+export function drawProfileForeground(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  config: ProfileModeConfig,
+  dt: number,
+): void {
+  // Ripples
+  if (config.effects.ripples.active) {
+    // Cap ripple count before spawning
+    if (state.ripples.length < 50) {
+      const spawnRate = config.effects.ripples.rate;
+      if (Math.random() < spawnRate * dt) {
+        state.ripples.push({
+          x: Math.random() * w,
+          y: h - 10 + Math.random() * 10,
+          radius: 1,
+          alpha: 0.4,
+        });
+      }
+    }
+
+    const rc = config.effects.ripples.color;
+    for (let i = state.ripples.length - 1; i >= 0; i--) {
+      const r = state.ripples[i];
+      r.radius += dt * 30;
+      r.alpha -= dt * 0.8;
+      if (r.alpha <= 0) {
+        state.ripples.splice(i, 1);
+        continue;
+      }
+      ctx.strokeStyle = `rgba(${rc[0]},${rc[1]},${rc[2]},${r.alpha})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    if (state.ripples.length > 50) {
+      state.ripples.splice(0, state.ripples.length - 50);
+    }
+  }
+
+  // Lightning
+  if (config.effects.lightning.active) {
+    const [minInterval, maxInterval] = config.effects.lightning.interval;
+    state.lastFlash += dt;
+    if (state.lastFlash >= state.nextFlashInterval) {
+      state.flashIntensity = 0.8;
+      state.lastFlash = 0;
+      state.nextFlashInterval = minInterval + Math.random() * (maxInterval - minInterval);
+    }
+    if (state.flashIntensity > 0.01) {
+      ctx.fillStyle = `rgba(255,255,255,${state.flashIntensity})`;
+      ctx.fillRect(0, 0, w, h);
+      state.flashIntensity *= 0.85;
+    }
   }
 }
 

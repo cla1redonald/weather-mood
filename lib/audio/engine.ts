@@ -1,8 +1,10 @@
 import { NormalizedParams, WeatherCondition } from '@/types/weather';
+import type { SoundscapeProfile } from '@/types/mood';
 import { createToneLayer, ToneLayer } from './tone';
 import { createWindLayer, WindLayer } from './wind';
 import { createHumidityFilter, HumidityFilter } from './humidity';
 import { createPrecipitationLayer, PrecipitationLayer } from './precipitation';
+import { createThunderLayer, ThunderLayer } from './thunder';
 
 const RAMP_DURATION = 3; // seconds for parameter transitions
 const MUTE_FADE = 0.5; // seconds for mute fade
@@ -11,8 +13,10 @@ const UNMUTE_FADE = 1; // seconds for unmute fade
 export interface AudioEngine {
   /** Resume AudioContext (must be called from user gesture) */
   resume(): Promise<void>;
-  /** Update all audio parameters from weather data */
+  /** Update all audio parameters from weather data (fallback path) */
   update(params: NormalizedParams, condition: WeatherCondition): void;
+  /** Apply an AI-generated soundscape profile */
+  applyProfile(profile: SoundscapeProfile): void;
   /** Mute audio with smooth fade */
   mute(): void;
   /** Unmute audio with smooth fade */
@@ -30,6 +34,7 @@ export function createAudioEngine(): AudioEngine {
   let windLayer: WindLayer | null = null;
   let humidityFilter: HumidityFilter | null = null;
   let precipLayer: PrecipitationLayer | null = null;
+  let thunderLayer: ThunderLayer | null = null;
   let muted = true;
   let destroyed = false;
 
@@ -42,11 +47,15 @@ export function createAudioEngine(): AudioEngine {
       masterGain.gain.setValueAtTime(0, ctx.currentTime);
       masterGain.connect(ctx.destination);
 
-      // Build audio graph: tone -> wind (LFO) -> humidity (filter) -> master
+      // Build audio graph:
+      // tone -> wind (LFO) -> humidity (filter) -> master
+      // precip -> humidity (filter) -> master
+      // thunder -> humidity (filter) -> master
       humidityFilter = createHumidityFilter(ctx, masterGain);
       windLayer = createWindLayer(ctx, humidityFilter.input);
       toneLayer = createToneLayer(ctx, windLayer.input);
       precipLayer = createPrecipitationLayer(ctx, humidityFilter.input);
+      thunderLayer = createThunderLayer(ctx, humidityFilter.input);
     }
 
     return { ctx: ctx!, masterGain: masterGain! };
@@ -68,6 +77,17 @@ export function createAudioEngine(): AudioEngine {
       windLayer?.update(params.windSpeed, now, RAMP_DURATION);
       humidityFilter?.update(params.humidity, now, RAMP_DURATION);
       precipLayer?.update(condition, now, RAMP_DURATION);
+    },
+
+    applyProfile(profile: SoundscapeProfile) {
+      const { ctx } = ensureContext();
+      const now = ctx.currentTime;
+
+      toneLayer?.applyProfile(profile.tone, now, RAMP_DURATION);
+      windLayer?.applyProfile(profile.wind, now, RAMP_DURATION);
+      humidityFilter?.applyProfile(profile.filter, now, RAMP_DURATION);
+      precipLayer?.applyProfile(profile.precipitation, now, RAMP_DURATION);
+      thunderLayer?.applyProfile(profile.thunder);
     },
 
     mute() {
@@ -101,10 +121,12 @@ export function createAudioEngine(): AudioEngine {
       windLayer?.destroy();
       humidityFilter?.destroy();
       precipLayer?.destroy();
+      thunderLayer?.destroy();
       toneLayer = null;
       windLayer = null;
       humidityFilter = null;
       precipLayer = null;
+      thunderLayer = null;
 
       if (ctx) {
         ctx.close();

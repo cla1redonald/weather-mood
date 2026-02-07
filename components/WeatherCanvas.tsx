@@ -2,14 +2,16 @@
 
 import { useRef, useEffect, useCallback } from 'react';
 import type { WeatherCondition, NormalizedParams } from '@/types/weather';
+import type { VisualProfile } from '@/types/mood';
 import { createRenderer, type CanvasRenderer } from '@/lib/canvas';
 
 interface WeatherCanvasProps {
   condition: WeatherCondition | null;
   params: NormalizedParams | null;
+  visualProfile?: VisualProfile | null;
 }
 
-export default function WeatherCanvas({ condition, params }: WeatherCanvasProps) {
+export default function WeatherCanvas({ condition, params, visualProfile }: WeatherCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
 
@@ -29,11 +31,11 @@ export default function WeatherCanvas({ condition, params }: WeatherCanvasProps)
     if (!renderer) return;
 
     if (!renderer.isRunning()) {
-      renderer.start({ condition, params });
+      renderer.start({ condition, params, visualProfile: visualProfile ?? null });
     } else {
-      renderer.update({ condition, params });
+      renderer.update({ condition, params, visualProfile: visualProfile ?? null });
     }
-  }, [condition, params, initRenderer]);
+  }, [condition, params, visualProfile, initRenderer]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -44,6 +44,7 @@ function createMockBiquadFilter() {
     type: 'lowpass' as BiquadFilterType,
     frequency: createMockAudioParam(4000),
     Q: createMockAudioParam(1),
+    gain: createMockAudioParam(0),
     connect: vi.fn(),
     disconnect: vi.fn(),
   };

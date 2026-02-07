@@ -3,14 +3,24 @@
  * Resets on cold start (Vercel Edge Function), which is acceptable for this project.
  */
 
+import type { SoundscapeProfile, VisualProfile } from '@/types/mood';
+
 interface CacheEntry {
   poem: string;
+  timestamp: number;
+}
+
+export interface MoodCacheEntry {
+  poem: string;
+  sound: SoundscapeProfile;
+  visual: VisualProfile;
   timestamp: number;
 }
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 const cache = new Map<string, CacheEntry>();
+const moodCache = new Map<string, MoodCacheEntry>();
 
 /**
  * Generate a cache key from city and weather condition.
@@ -46,10 +56,44 @@ export function setCachedPoem(key: string, poem: string): void {
 }
 
 /**
+ * Get a cached mood profile if it exists and hasn't expired.
+ */
+export function getCachedMood(key: string, ttlMs: number = DEFAULT_TTL_MS): MoodCacheEntry | null {
+  const entry = moodCache.get(key);
+  if (!entry) return null;
+
+  const age = Date.now() - entry.timestamp;
+  if (age > ttlMs) {
+    moodCache.delete(key);
+    return null;
+  }
+
+  return entry;
+}
+
+/**
+ * Store a mood profile in the cache.
+ */
+export function setCachedMood(
+  key: string,
+  poem: string,
+  sound: SoundscapeProfile,
+  visual: VisualProfile,
+): void {
+  moodCache.set(key, {
+    poem,
+    sound,
+    visual,
+    timestamp: Date.now(),
+  });
+}
+
+/**
  * Clear the entire cache. Useful for testing.
  */
 export function clearCache(): void {
   cache.clear();
+  moodCache.clear();
 }
 
 /**
@@ -57,4 +101,11 @@ export function clearCache(): void {
  */
 export function getCacheSize(): number {
   return cache.size;
+}
+
+/**
+ * Get the current mood cache size. Useful for testing.
+ */
+export function getMoodCacheSize(): number {
+  return moodCache.size;
 }

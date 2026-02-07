@@ -1,4 +1,5 @@
 import type { WeatherCondition, NormalizedParams } from '@/types/weather';
+import type { ProfileModeConfig } from './modes';
 import {
   type RGBA,
   type WeatherPalette,
@@ -201,6 +202,87 @@ function createWindParticle(
     alpha: 0.4 + Math.random() * 0.4,
     life: 1,
     maxLife: 2 + Math.random() * 3,
+    trail: [],
+  };
+}
+
+// ── Profile-driven spawning ──────────────────────────────
+
+export interface ProfileSpawnConfig {
+  canvasWidth: number;
+  canvasHeight: number;
+  profileMode: ProfileModeConfig;
+  params: NormalizedParams;
+}
+
+/**
+ * Spawn a particle using a VisualProfile-driven mode config.
+ */
+export function spawnProfileParticle(config: ProfileSpawnConfig): Particle {
+  const { canvasWidth, canvasHeight, profileMode, params } = config;
+  const palette = profileMode.palette;
+  const baseColor = randomParticleColor(palette);
+  const color = temperatureShift(baseColor, params.temperature);
+
+  const [sMin, sMax] = profileMode.sizeRange;
+  const [aMin, aMax] = profileMode.alphaRange;
+  const [spMin, spMax] = profileMode.speedRange;
+  const [lMin, lMax] = profileMode.lifespan;
+
+  const size = sMin + Math.random() * (sMax - sMin);
+  const alpha = aMin + Math.random() * (aMax - aMin);
+  const speed = spMin + Math.random() * (spMax - spMin);
+  const maxLife = lMin + Math.random() * (lMax - lMin);
+
+  // Compute velocity based on direction
+  let vx = 0;
+  let vy = 0;
+  let x = Math.random() * canvasWidth;
+  let y = Math.random() * canvasHeight;
+
+  switch (profileMode.direction) {
+    case 'down':
+      vx = (Math.random() - 0.5) * speed * 0.2;
+      vy = speed;
+      x = Math.random() * canvasWidth;
+      y = -Math.random() * canvasHeight * 0.2;
+      break;
+    case 'up':
+      vx = (Math.random() - 0.5) * speed * 0.2;
+      vy = -speed;
+      x = Math.random() * canvasWidth;
+      y = canvasHeight + Math.random() * canvasHeight * 0.1;
+      break;
+    case 'left':
+      vx = -speed;
+      vy = (Math.random() - 0.5) * speed * 0.3;
+      x = canvasWidth + Math.random() * canvasWidth * 0.1;
+      y = Math.random() * canvasHeight;
+      break;
+    case 'right':
+      vx = speed;
+      vy = (Math.random() - 0.5) * speed * 0.3;
+      x = -Math.random() * canvasWidth * 0.1;
+      y = Math.random() * canvasHeight;
+      break;
+    case 'random': {
+      const angle = Math.random() * Math.PI * 2;
+      vx = Math.cos(angle) * speed;
+      vy = Math.sin(angle) * speed;
+      break;
+    }
+  }
+
+  return {
+    x,
+    y,
+    vx,
+    vy,
+    size,
+    color,
+    alpha,
+    life: 1,
+    maxLife,
     trail: [],
   };
 }
@@ -413,6 +495,151 @@ function drawWindParticle(ctx: CanvasRenderingContext2D, p: Particle, alpha: num
   }
 
   // Draw head
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = rgbaToString([color[0], color[1], color[2], 1]);
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ── Profile-driven update ───────────────────────────────
+
+/**
+ * Update all particles in the pool using profile mode config.
+ * Returns the number of active particles.
+ */
+export function updatePoolWithProfile(
+  pool: ParticlePool,
+  dt: number,
+  config: ProfileSpawnConfig,
+): number {
+  const { canvasWidth, canvasHeight, profileMode, params } = config;
+  const particles = pool.particles;
+  const drawStyle = profileMode.drawStyle;
+
+  // Update existing particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt / p.maxLife;
+
+    if (p.life <= 0 || isOffScreen(p, canvasWidth, canvasHeight)) {
+      particles[i] = spawnProfileParticle(config);
+      continue;
+    }
+
+    // Track trail for trail draw style
+    if (drawStyle === 'trail') {
+      p.trail.push({ x: p.x, y: p.y });
+      if (p.trail.length > 6) {
+        p.trail.shift();
+      }
+    }
+
+    p.x += p.vx * dt * 60;
+    p.y += p.vy * dt * 60;
+
+    // Cloud cover affects particle alpha
+    p.alpha = Math.min(p.alpha, 1 - params.cloudCover * 0.3);
+  }
+
+  // Spawn new particles to fill pool
+  const toSpawn = Math.min(
+    Math.ceil(profileMode.spawnRate * dt),
+    pool.maxCount - particles.length,
+  );
+
+  for (let i = 0; i < toSpawn; i++) {
+    particles.push(spawnProfileParticle(config));
+  }
+
+  return particles.length;
+}
+
+// ── Profile-driven draw ─────────────────────────────────
+
+/**
+ * Draw all particles using a profile-driven draw style.
+ */
+export function drawPoolWithProfile(
+  pool: ParticlePool,
+  ctx: CanvasRenderingContext2D,
+  drawStyle: ProfileModeConfig['drawStyle'],
+): void {
+  for (const p of pool.particles) {
+    const alpha = p.alpha * Math.min(p.life, 1);
+    if (alpha <= 0.01) continue;
+
+    ctx.save();
+
+    switch (drawStyle) {
+      case 'circle':
+        drawCircleParticle(ctx, p, alpha);
+        break;
+      case 'line':
+        drawLineParticle(ctx, p, alpha);
+        break;
+      case 'glow':
+        drawGlowParticle(ctx, p, alpha);
+        break;
+      case 'trail':
+        drawTrailParticle(ctx, p, alpha);
+        break;
+    }
+
+    ctx.restore();
+  }
+}
+
+/** Filled circle — like snow/cloudy/clear small particles */
+function drawCircleParticle(ctx: CanvasRenderingContext2D, p: Particle, alpha: number): void {
+  const color = p.color;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = rgbaToString([color[0], color[1], color[2], 1]);
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Stroked line with motion trail — like rain */
+function drawLineParticle(ctx: CanvasRenderingContext2D, p: Particle, alpha: number): void {
+  const color = p.color;
+  ctx.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha})`;
+  ctx.lineWidth = p.size;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.lineTo(p.x - p.vx * 0.3, p.y - p.vy * 0.3);
+  ctx.stroke();
+}
+
+/** Radial gradient glow — like clear large particles */
+function drawGlowParticle(ctx: CanvasRenderingContext2D, p: Particle, alpha: number): void {
+  const color = p.color;
+  const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+  gradient.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},${alpha})`);
+  gradient.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`);
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Polyline trail of last N positions — like wind */
+function drawTrailParticle(ctx: CanvasRenderingContext2D, p: Particle, alpha: number): void {
+  const color = p.color;
+
+  if (p.trail.length > 1) {
+    ctx.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha * 0.3})`;
+    ctx.lineWidth = p.size * 0.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(p.trail[0].x, p.trail[0].y);
+    for (let i = 1; i < p.trail.length; i++) {
+      ctx.lineTo(p.trail[i].x, p.trail[i].y);
+    }
+    ctx.stroke();
+  }
+
   ctx.globalAlpha = alpha;
   ctx.fillStyle = rgbaToString([color[0], color[1], color[2], 1]);
   ctx.beginPath();

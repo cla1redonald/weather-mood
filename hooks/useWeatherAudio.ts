@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { NormalizedParams, WeatherCondition } from '@/types/weather';
+import type { SoundscapeProfile } from '@/types/mood';
 import { createAudioEngine, type AudioEngine } from '@/lib/audio';
 
 interface UseWeatherAudioReturn {
@@ -18,6 +19,7 @@ interface UseWeatherAudioReturn {
 /**
  * React hook that creates and manages the weather audio engine.
  * Connects NormalizedParams + WeatherCondition to the synthesizer.
+ * When a SoundscapeProfile is provided, it overrides the parametric defaults.
  *
  * Audio auto-starts when startOnGesture() is called from a user gesture
  * (e.g., city selection click). This satisfies browser autoplay policy.
@@ -25,6 +27,7 @@ interface UseWeatherAudioReturn {
 export function useWeatherAudio(
   params: NormalizedParams | null,
   condition: WeatherCondition | null,
+  soundProfile?: SoundscapeProfile | null,
 ): UseWeatherAudioReturn {
   const engineRef = useRef<AudioEngine | null>(null);
   const [isMuted, setIsMuted] = useState(true);
@@ -43,9 +46,10 @@ export function useWeatherAudio(
     };
   }, []);
 
-  // Track latest params
+  // Track latest params and profile
   const paramsRef = useRef<NormalizedParams | null>(null);
   const conditionRef = useRef<WeatherCondition | null>(null);
+  const profileRef = useRef<SoundscapeProfile | null>(null);
 
   // Update audio params when weather changes
   useEffect(() => {
@@ -54,6 +58,13 @@ export function useWeatherAudio(
     if (!params || !condition || !engineRef.current || isMuted) return;
     engineRef.current.update(params, condition);
   }, [params, condition, isMuted]);
+
+  // Apply AI sound profile when it arrives (overrides parametric defaults)
+  useEffect(() => {
+    profileRef.current = soundProfile ?? null;
+    if (!soundProfile || !engineRef.current || isMuted) return;
+    engineRef.current.applyProfile(soundProfile);
+  }, [soundProfile, isMuted]);
 
   // Auto-start audio from a user gesture (city click)
   const startOnGesture = useCallback(async () => {
@@ -64,6 +75,9 @@ export function useWeatherAudio(
     await engine.resume();
     if (paramsRef.current && conditionRef.current) {
       engine.update(paramsRef.current, conditionRef.current);
+    }
+    if (profileRef.current) {
+      engine.applyProfile(profileRef.current);
     }
     engine.unmute();
     setIsMuted(false);
@@ -80,6 +94,9 @@ export function useWeatherAudio(
     await engine.resume();
     if (paramsRef.current && conditionRef.current) {
       engine.update(paramsRef.current, conditionRef.current);
+    }
+    if (profileRef.current) {
+      engine.applyProfile(profileRef.current);
     }
     engine.unmute();
     setIsMuted(false);
