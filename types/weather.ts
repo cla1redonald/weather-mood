@@ -11,6 +11,7 @@ export interface GeoLocation {
   latitude: number;
   longitude: number;
   country: string;
+  countryCode: string;
 }
 
 /**
@@ -25,6 +26,9 @@ export interface WeatherData {
   weatherCode: number;        // WMO weather code
   uvIndex: number;            // UV index (0-11+)
   condition: WeatherCondition;
+  sunrise: string;            // ISO 8601 local time, e.g. "2026-02-07T08:11"
+  sunset: string;             // ISO 8601 local time, e.g. "2026-02-07T17:57"
+  utcOffsetSeconds: number;   // Timezone offset in seconds from UTC
 }
 
 /**

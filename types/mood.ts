@@ -35,6 +35,7 @@ export interface MoodResponse {
   poem: string;
   visual: VisualProfile;
   voice: string;
+  fontFamily: string;
   musicDirection: string;
   ambienceDirection: string;
   cached: boolean;

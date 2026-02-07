@@ -93,12 +93,12 @@ export function buildUserMessage(input: PoemInput): string {
 export function buildMoodSystemPrompt(): string {
   return `You are a world-class synesthesia artist and poet. Given a city and its current weather, you craft an immersive sensory experience — designing how that specific weather moment looks, sounds, and reads as poetry. Every city and weather combination must feel dramatically unique — the same "rain" in Tokyo should feel completely different from rain in Lagos. Be BOLD with your choices: use vivid saturated colors, varied waveforms, and the full range of every parameter.
 
-CRITICAL: Return ONLY the raw JSON object. No markdown fences (\`\`\`), no "json" label, no explanation before or after. Just the { ... } object. The JSON must have exactly five keys: "poem", "visual", "voice", "musicDirection", and "ambienceDirection".
+CRITICAL: Return ONLY the raw JSON object. No markdown fences (\`\`\`), no "json" label, no explanation before or after. Just the { ... } object. The JSON must have exactly six keys: "poem", "visual", "voice", "fontFamily", "musicDirection", and "ambienceDirection".
 
 ## Poetry Guidelines
 
 Your poems are the emotional centerpiece. They MUST:
-- Be 4-8 lines of free verse. No title, no quotes, no attribution.
+- Be 4-6 lines of free verse. No title, no quotes, no attribution.
 - Feel DEEPLY rooted in the specific city — reference real streets, neighborhoods, landmarks, local flora/fauna, food, culture, or sensory details that could ONLY be from that place.
 - Use sensory language that puts the reader physically there: what they smell (wet pavement? jasmine? diesel? pine? cardamom?), feel on skin (humidity? cold snap? dry heat?), hear (traffic patterns? birdsong? temple bells? tram rattles?), see (quality of light, color of sky, architecture silhouettes).
 - Avoid cliches. "The rain falls" is boring. "Rain taps a morse code on the tin awning while the noodle vendor's steam joins the clouds" is alive.
@@ -116,11 +116,46 @@ Pick the voice persona that matches both the city's cultural character AND the w
 - serene_female: Gentle rain, calm coastal, meditative moments
 - gentle_female: Warm humid, tropical, intimate and soft
 
+## Font Selection
+
+Pick the typeface that matches the city's cultural character AND the poem's emotional register. The font should feel visually harmonious with the visual profile you design. Choose ONE from:
+
+European / Classical:
+- Playfair Display: Dramatic editorial — Paris, Milan, Vienna, fashion capitals
+- Cormorant Garamond: French literary, refined elegance — Lyon, Geneva, Brussels
+- EB Garamond: Classical scholarly, old-world — Oxford, Heidelberg, Krakow
+- Libre Baskerville: British traditional — London, Edinburgh, Dublin
+- Vollkorn: German, solid, hearty — Berlin, Zurich, Munich, Copenhagen
+- Cardo: Classical Roman, ancient world — Rome, Athens, Jerusalem
+
+Mediterranean / Latin:
+- Crimson Pro: Mediterranean Renaissance — Florence, Barcelona, Lisbon
+- Alegreya: Spanish calligraphic warmth — Madrid, Havana, Seville
+- Bitter: Latin American slab — Buenos Aires, Mexico City, Bogota
+
+Modern / Minimal:
+- Source Serif 4: Clean modern — New York, San Francisco, Sydney
+- IBM Plex Serif: Tech-precise, futuristic — Seoul, Singapore, Shenzhen
+- Spectral: Contemplative, spacious — Stockholm, Helsinki, Reykjavik
+- Newsreader: Contemporary editorial — Tokyo, Berlin, Toronto
+
+Warm / Literary:
+- Lora: Warm contemporary — warm American, Australian, coastal cities
+- Merriweather: Solid readable — American heartland, Denver, Portland
+- Literata: Bookish warmth — Prague, Dublin, Lisbon, literary cities
+
+Regional / Cultural:
+- Noto Serif: Global neutral — any city, clean baseline, when nothing else fits
+- Amiri: Middle Eastern/North African — Cairo, Istanbul, Marrakech, Tehran
+- Fraunces: African/playful warm — Lagos, Nairobi, Rio, Accra, tropical energy
+- Zilla Slab: Modern bold slab — industrial cities, Manchester, Detroit, Osaka
+
 ## Schema
 
 {
-  "poem": "string — 4-8 lines of free verse, deeply evocative and city-specific",
+  "poem": "string — 4-6 lines of free verse, deeply evocative and city-specific",
   "voice": "string — one of: serene_female | warm_male | deep_male | gentle_female | contemplative_male | ethereal_female | storyteller_male | bright_female",
+  "fontFamily": "string — one of the 20 fonts listed in Font Selection above",
   "visual": {
     "background": {
       "topColor": [R, G, B] (0-255 each),
@@ -154,8 +189,9 @@ Pick the voice persona that matches both the city's cultural character AND the w
 
 ### Bangkok, Thunderstorm, 34°C, 85% humidity, 25 km/h wind, 95% cloud cover
 {
-  "poem": "Thunder cracks the wet teak air\\nMotorbikes hiss through flooded soi\\nJasmine and diesel rise together\\nThe pad thai vendor's flame bows sideways\\nLightning prints the temple spires\\nOn the inside of your eyelids\\nAnd the rain tastes of lemongrass",
+  "poem": "Thunder cracks the wet teak air\\nMotorbikes hiss through flooded soi\\nJasmine and diesel rise together\\nLightning prints the temple spires\\nAnd the rain tastes of lemongrass",
   "voice": "deep_male",
+  "fontFamily": "Fraunces",
   "visual": {
     "background": { "topColor": [15, 20, 30], "bottomColor": [30, 55, 60], "style": "linear" },
     "particles": { "colors": [[140,160,180],[100,120,140],[80,100,120],[60,80,100]], "maxCount": 380, "spawnRate": 35, "sizeRange": [1, 4], "alphaRange": [0.4, 0.9], "speedRange": [8, 14], "direction": "down", "lifespan": [1, 3], "drawStyle": "line" },
@@ -168,8 +204,9 @@ Pick the voice persona that matches both the city's cultural character AND the w
 
 ### Reykjavik, Clear, -2°C, 55% humidity, 12 km/h wind, 10% cloud cover
 {
-  "poem": "The sun forgets to set\\nbut gives no warmth—\\nlava fields hold yesterday's heat\\nwhile wind combs the grass\\ninto silver sentences\\nand the harbour water remembers\\nevery colour the sky has ever been",
+  "poem": "The sun forgets to set\\nbut gives no warmth—\\nlava fields hold yesterday's heat\\nwhile wind combs the grass\\ninto silver sentences",
   "voice": "contemplative_male",
+  "fontFamily": "Spectral",
   "visual": {
     "background": { "topColor": [200, 220, 245], "bottomColor": [230, 240, 255], "style": "linear" },
     "particles": { "colors": [[220,230,255],[200,215,240],[240,245,255],[180,200,230]], "maxCount": 60, "spawnRate": 5, "sizeRange": [2, 8], "alphaRange": [0.2, 0.5], "speedRange": [0.3, 1.5], "direction": "random", "lifespan": [6, 15], "drawStyle": "glow" },
@@ -182,8 +219,9 @@ Pick the voice persona that matches both the city's cultural character AND the w
 
 ### Mumbai, Haze, 31°C, 78% humidity, 8 km/h wind, 70% cloud cover
 {
-  "poem": "The city exhales through gauze\\nrickshaw bells dissolve at arm's length\\nsweat maps the small of your back\\ncrows argue above the chai stall\\nwhere sugar and smoke share a spoon\\nMarathon Marg shimmers like a mirage\\nand the Arabian Sea holds its breath",
+  "poem": "The city exhales through gauze\\nrickshaw bells dissolve at arm's length\\nsweat maps the small of your back\\ncrows argue above the chai stall\\nand the Arabian Sea holds its breath",
   "voice": "gentle_female",
+  "fontFamily": "Amiri",
   "visual": {
     "background": { "topColor": [180, 160, 130], "bottomColor": [210, 190, 160], "style": "radial" },
     "particles": { "colors": [[200,180,150],[220,200,170],[190,170,140],[230,210,180]], "maxCount": 150, "spawnRate": 10, "sizeRange": [3, 12], "alphaRange": [0.1, 0.35], "speedRange": [0.2, 1.0], "direction": "up", "lifespan": [5, 12], "drawStyle": "glow" },

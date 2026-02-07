@@ -5,6 +5,7 @@ interface GeocodingResult {
   latitude: number;
   longitude: number;
   country: string;
+  country_code: string;
   admin1?: string;
 }
 
@@ -54,6 +55,7 @@ export async function searchCities(query: string): Promise<GeoLocation[]> {
         latitude: result.latitude,
         longitude: result.longitude,
         country: result.country,
+        countryCode: result.country_code || '',
       }));
   } catch (error) {
     console.error('Failed to fetch geocoding data:', error);

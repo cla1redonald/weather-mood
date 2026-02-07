@@ -13,6 +13,11 @@ interface OpenMeteoCurrentWeather {
 
 interface OpenMeteoResponse {
   current: OpenMeteoCurrentWeather;
+  utc_offset_seconds: number;
+  daily?: {
+    sunrise?: string[];
+    sunset?: string[];
+  };
 }
 
 /**
@@ -34,6 +39,9 @@ export async function fetchWeather(
       'weather_code',
       'uv_index',
     ].join(','),
+    daily: 'sunrise,sunset',
+    timezone: 'auto',
+    forecast_days: '1',
   });
 
   const url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
@@ -66,6 +74,10 @@ export async function fetchWeather(
     const weatherCode = typeof current.weather_code === 'number' ? current.weather_code : 0;
     const uvIndex = typeof current.uv_index === 'number' ? current.uv_index : 0;
 
+    const sunrise = data.daily?.sunrise?.[0] ?? '';
+    const sunset = data.daily?.sunset?.[0] ?? '';
+    const utcOffsetSeconds = typeof data.utc_offset_seconds === 'number' ? data.utc_offset_seconds : 0;
+
     const weatherData: WeatherData = {
       temperature,
       humidity,
@@ -75,6 +87,9 @@ export async function fetchWeather(
       weatherCode,
       uvIndex,
       condition: classifyWeather(weatherCode, windSpeed),
+      sunrise,
+      sunset,
+      utcOffsetSeconds,
     };
 
     return weatherData;

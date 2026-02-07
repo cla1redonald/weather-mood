@@ -9,6 +9,7 @@ import {
   clampVisualProfile,
 } from '@/types/mood';
 import type { VisualProfile } from '@/types/mood';
+import { validateFont } from '@/lib/fonts';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -250,7 +251,7 @@ export async function POST(request: NextRequest) {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2048,
+      max_tokens: 1024,
       system: buildMoodSystemPrompt(),
       messages: [
         {
@@ -271,6 +272,7 @@ export async function POST(request: NextRequest) {
         poem: fallback.poem,
         visual: fallback.visual,
         voice: fallback.voice,
+        fontFamily: 'Lora',
         musicDirection: fallback.musicDirection,
         ambienceDirection: fallback.ambienceDirection,
         cached: false,
@@ -281,7 +283,7 @@ export async function POST(request: NextRequest) {
     // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
     rawText = rawText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
 
-    let parsed: { poem?: string; visual?: Partial<VisualProfile>; voice?: string; musicDirection?: string; ambienceDirection?: string };
+    let parsed: { poem?: string; visual?: Partial<VisualProfile>; voice?: string; fontFamily?: string; musicDirection?: string; ambienceDirection?: string };
     try {
       parsed = JSON.parse(rawText);
     } catch (parseError) {
@@ -292,6 +294,7 @@ export async function POST(request: NextRequest) {
         poem: fallback.poem,
         visual: fallback.visual,
         voice: fallback.voice,
+        fontFamily: 'Lora',
         musicDirection: fallback.musicDirection,
         ambienceDirection: fallback.ambienceDirection,
         cached: false,
@@ -308,6 +311,7 @@ export async function POST(request: NextRequest) {
 
     const visual = clampVisualProfile(parsed.visual ?? {});
     const voice = validateVoicePersona(parsed.voice);
+    const fontFamily = validateFont(parsed.fontFamily);
     const musicDirection = typeof parsed.musicDirection === 'string' && parsed.musicDirection.trim().length > 0
       ? parsed.musicDirection.trim()
       : fallback.musicDirection;
@@ -315,7 +319,7 @@ export async function POST(request: NextRequest) {
       ? parsed.ambienceDirection.trim()
       : fallback.ambienceDirection;
 
-    return NextResponse.json({ poem, visual, voice, musicDirection, ambienceDirection, cached: false, _source: 'ai' });
+    return NextResponse.json({ poem, visual, voice, fontFamily, musicDirection, ambienceDirection, cached: false, _source: 'ai' });
   } catch (err) {
     console.error('Mood generation error:', err);
     return NextResponse.json(

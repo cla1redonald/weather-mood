@@ -325,9 +325,49 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
       abortRef.current.abort();
     }
 
-    // Fade out existing audio, then start new fetches
+    // Overlap: fade old audio while starting new fetches in parallel
     const startFetches = async () => {
-      await stopAll();
+      const STOP_FADE_MS = 400;
+
+      // Save refs to old audio elements for fade-out
+      const oldMusic = musicRef.current;
+      const oldSfx = sfxRef.current;
+      const oldNarration = narrationRef.current;
+      const oldBlobUrls = [...blobUrlsRef.current];
+
+      // Clear narration timer
+      if (narrationTimerRef.current) {
+        clearTimeout(narrationTimerRef.current);
+        narrationTimerRef.current = null;
+      }
+
+      // Fire-and-forget fade-out on old elements
+      if (oldMusic && !oldMusic.paused) fadeVolume(oldMusic, 0, STOP_FADE_MS);
+      if (oldSfx && !oldSfx.paused) fadeVolume(oldSfx, 0, STOP_FADE_MS);
+      if (oldNarration && !oldNarration.paused) fadeVolume(oldNarration, 0, STOP_FADE_MS);
+
+      // Schedule cleanup of old elements after fade completes
+      setTimeout(() => {
+        oldMusic?.pause(); if (oldMusic) oldMusic.src = '';
+        oldSfx?.pause(); if (oldSfx) oldSfx.src = '';
+        oldNarration?.pause(); if (oldNarration) oldNarration.src = '';
+        oldBlobUrls.forEach(url => URL.revokeObjectURL(url));
+      }, STOP_FADE_MS);
+
+      // Create fresh audio elements for new city immediately
+      musicRef.current = new Audio();
+      musicRef.current.loop = true;
+      musicRef.current.volume = 0;
+
+      sfxRef.current = new Audio();
+      sfxRef.current.loop = true;
+      sfxRef.current.volume = 0;
+
+      narrationRef.current = new Audio();
+      narrationRef.current.loop = false;
+      narrationRef.current.volume = 0;
+
+      blobUrlsRef.current = [];
 
       const controller = new AbortController();
       abortRef.current = controller;

@@ -11,6 +11,7 @@ import CitySearch from '@/components/CitySearch';
 import WeatherInfo from '@/components/WeatherInfo';
 import MuteToggle from '@/components/MuteToggle';
 import PoemOverlay from '@/components/PoemOverlay';
+import LoadingOverlay from '@/components/LoadingOverlay';
 import { useElevenLabsAudio } from '@/hooks/useElevenLabsAudio';
 
 function HomeContent() {
@@ -21,6 +22,10 @@ function HomeContent() {
   const [poem, setPoem] = useState<string | null>(null);
   const [visualProfile, setVisualProfile] = useState<VisualProfile | null>(null);
   const [isLoadingWeather, setIsLoadingWeather] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [loadingCity, setLoadingCity] = useState<string | null>(null);
+  const [countryCode, setCountryCode] = useState<string | null>(null);
+  const [fontFamily, setFontFamily] = useState<string | null>(null);
   const [weatherLoaded, setWeatherLoaded] = useState(false);
 
   // Audio — ElevenLabs only (synth removed)
@@ -42,9 +47,10 @@ function HomeContent() {
     abortControllerRef.current = controller;
 
     setIsLoadingWeather(true);
+    setIsTransitioning(true);
+    setLoadingCity(city.name);
+    setCountryCode(city.countryCode);
     setWeatherLoaded(false);
-    setPoem(null); // Fade out old poem immediately
-    setVisualProfile(null);
 
     try {
       const weather = await fetchWeather(city.latitude, city.longitude);
@@ -88,7 +94,10 @@ function HomeContent() {
         if (response.ok) {
           const data = await response.json();
           if (!controller.signal.aborted) {
+            setIsTransitioning(false);
+            setLoadingCity(null);
             setPoem(data.poem);
+            if (data.fontFamily) setFontFamily(data.fontFamily);
             if (data.visual) setVisualProfile(data.visual);
 
             // Trigger ElevenLabs audio (music + SFX + narration) in parallel
@@ -101,10 +110,14 @@ function HomeContent() {
           }
         } else {
           console.error('Mood API error:', response.status, await response.text().catch(() => ''));
+          setIsTransitioning(false);
+          setLoadingCity(null);
         }
       } catch (error: unknown) {
         if ((error as Error)?.name !== 'AbortError') {
           console.error('Failed to fetch mood:', error);
+          setIsTransitioning(false);
+          setLoadingCity(null);
         }
         // Silently fail - parametric visuals still work
       }
@@ -149,13 +162,16 @@ function HomeContent() {
   return (
     <main className="fixed inset-0 w-screen h-screen overflow-hidden bg-black">
       {/* Layer 1: Canvas (z-0) */}
-      <WeatherCanvas condition={condition} params={normalizedParams} visualProfile={visualProfile} isAudioLoading={elevenLabs.isLoading} />
+      <WeatherCanvas condition={condition} params={normalizedParams} visualProfile={visualProfile} isAudioLoading={elevenLabs.isLoading} isTransitioning={isTransitioning} />
 
-      {/* Layer 2: Poem Overlay (z-10) */}
-      <PoemOverlay poem={poem} weatherLoaded={weatherLoaded} />
+      {/* Layer 2: Loading Overlay (z-10) — prominent centered indicator */}
+      <LoadingOverlay cityName={loadingCity} isVisible={isTransitioning} />
+
+      {/* Layer 3: Poem Overlay (z-10) */}
+      <PoemOverlay poem={poem} weatherLoaded={weatherLoaded} isTransitioning={isTransitioning} fontFamily={fontFamily} />
 
       {/* Layer 4: UI Controls (z-20+) */}
-      <WeatherInfo weather={weatherData} isLoading={isLoadingWeather} />
+      <WeatherInfo weather={weatherData} isLoading={isLoadingWeather} countryCode={countryCode} />
       <CitySearch onCitySelect={handleCitySelect} defaultCity={defaultCity} />
       <MuteToggle isMuted={isMuted} onToggle={handleToggleMute} />
     </main>
