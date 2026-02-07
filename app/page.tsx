@@ -111,6 +111,7 @@ function HomeContent() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             city: city.name,
+            country: city.country,
             temperature: weather.temperature,
             condition: weather.condition,
             humidity: weather.humidity,

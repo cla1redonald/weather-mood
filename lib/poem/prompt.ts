@@ -12,6 +12,7 @@ export interface PoemInput {
 
 export interface MoodInput {
   city: string;
+  country?: string;
   temperature: number;
   condition: string;
   humidity: number;
@@ -257,13 +258,15 @@ IMPORTANT RULES:
  * Includes granular weather data for maximum atmospheric differentiation.
  */
 export function buildMoodUserMessage(input: MoodInput): string {
-  const { city, temperature, condition, humidity, windSpeed, cloudCover, weatherCode, windDirection, uvIndex } = input;
+  const { city, country, temperature, condition, humidity, windSpeed, cloudCover, weatherCode, windDirection, uvIndex } = input;
   const wmoDesc = describeWMO(weatherCode);
   const windDir = describeWindDirection(windDirection);
   const uvDesc = describeUV(uvIndex);
 
+  const cityLabel = country ? `${city}, ${country}` : city;
+
   return [
-    `Generate a complete mood profile for ${city}.`,
+    `Generate a complete mood profile for ${cityLabel}.`,
     `Weather: ${wmoDesc} (${condition}), ${temperature}°C, ${humidity}% humidity, ${windSpeed} km/h wind from the ${windDir}, ${cloudCover}% cloud cover, UV index ${uvIndex} (${uvDesc}).`,
     'This is a UNIQUE moment — create something that has never existed before. Be bold, specific, and deeply rooted in this city\'s character.',
     'Return ONLY the JSON object.',

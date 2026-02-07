@@ -29,7 +29,7 @@ function validateVoicePersona(voice: unknown): string {
 function validateInput(body: unknown): MoodInput | null {
   if (typeof body !== 'object' || body === null) return null;
 
-  const { city, temperature, condition, humidity, windSpeed, cloudCover, weatherCode, windDirection, uvIndex } =
+  const { city, country, temperature, condition, humidity, windSpeed, cloudCover, weatherCode, windDirection, uvIndex } =
     body as Record<string, unknown>;
 
   if (typeof city !== 'string' || city.trim().length === 0) return null;
@@ -41,6 +41,7 @@ function validateInput(body: unknown): MoodInput | null {
 
   return {
     city: city.trim(),
+    country: typeof country === 'string' ? country.trim() : undefined,
     temperature,
     condition: condition.trim(),
     humidity,
