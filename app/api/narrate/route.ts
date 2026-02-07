@@ -9,21 +9,41 @@ import {
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Default voice: "Rachel" — calm, atmospheric female voice
-// Can be overridden via ELEVENLABS_VOICE_ID env var
-const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+// ElevenLabs voice IDs mapped to voice personas
+const VOICE_ID_MAP: Record<string, string> = {
+  serene_female: '21m00Tcm4TlvDq8ikWAM',    // Rachel
+  warm_male: 'ErXwobaYiN019PkySvjV',         // Antoni
+  deep_male: 'pNInz6obpgDQGcFmaJgB',         // Adam
+  gentle_female: 'MF3mGyEYCl7XYWbV9V6O',     // Elli
+  contemplative_male: 'TxGEqnHWrfWFTfGW9XjX', // Josh
+  ethereal_female: 'EXAVITQu4vr4xnSDxMaL',   // Sarah
+  storyteller_male: '2EiwWnXFnvU5JabPnv8n',   // Clyde
+  bright_female: 'AZnzlk1XvdvUeBnXmlld',     // Domi
+};
+
+const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel
+
+function resolveVoiceId(voice?: string): string {
+  if (process.env.ELEVENLABS_VOICE_ID) return process.env.ELEVENLABS_VOICE_ID;
+  if (voice && VOICE_ID_MAP[voice]) return VOICE_ID_MAP[voice];
+  return DEFAULT_VOICE_ID;
+}
 
 interface NarrateInput {
   poem: string;
+  voice?: string;
 }
 
 function validateInput(body: unknown): NarrateInput | null {
   if (typeof body !== 'object' || body === null) return null;
-  const { poem } = body as Record<string, unknown>;
+  const { poem, voice } = body as Record<string, unknown>;
 
   if (typeof poem !== 'string' || !poem.trim()) return null;
 
-  return { poem: poem.trim() };
+  return {
+    poem: poem.trim(),
+    voice: typeof voice === 'string' ? voice : undefined,
+  };
 }
 
 function hashPoem(poem: string): string {
@@ -57,8 +77,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 });
   }
 
-  // Check cache
-  const cacheKey = audioCacheKey('narrate', hashPoem(input.poem));
+  const voiceId = resolveVoiceId(input.voice);
+
+  // Check cache (include voice in key so different voices are cached separately)
+  const cacheKey = audioCacheKey('narrate', `${hashPoem(input.poem)}_${voiceId}`);
   const cached = getCachedAudio(cacheKey);
   if (cached) {
     return new NextResponse(cached, {
@@ -70,8 +92,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const voiceId = process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID;
-
     const response = await elevenlabsFetch(`/text-to-speech/${voiceId}`, {
       text: input.poem,
       model_id: 'eleven_multilingual_v2',

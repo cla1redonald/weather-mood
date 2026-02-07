@@ -17,6 +17,18 @@ import type { SoundscapeProfile, VisualProfile } from '@/types/mood';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const VALID_VOICE_PERSONAS = [
+  'serene_female', 'warm_male', 'deep_male', 'gentle_female',
+  'contemplative_male', 'ethereal_female', 'storyteller_male', 'bright_female',
+] as const;
+
+function validateVoicePersona(voice: unknown): string {
+  if (typeof voice === 'string' && VALID_VOICE_PERSONAS.includes(voice as typeof VALID_VOICE_PERSONAS[number])) {
+    return voice;
+  }
+  return 'serene_female'; // default fallback
+}
+
 function validateInput(body: unknown): MoodInput | null {
   if (typeof body !== 'object' || body === null) return null;
 
@@ -48,6 +60,7 @@ function buildFallbackProfile(condition: string): {
   poem: string;
   sound: SoundscapeProfile;
   visual: VisualProfile;
+  voice: string;
 } {
   const lower = condition.toLowerCase();
 
@@ -86,8 +99,11 @@ function buildFallbackProfile(condition: string): {
     description: 'Neutral blue-grey gradient with gentle particles',
   };
 
+  let voice = 'serene_female'; // default
+
   if (isStormy) {
     poem = 'Thunder rolls through the streets\nrain hammers the tin awnings\nlightning splits the dusk\nthe city holds its breath.';
+    voice = 'deep_male';
     sound = {
       ...sound,
       tone: { frequency: 70, waveform: 'sawtooth', gain: 0.22, harmonics: { second: 0.3, third: 0.2, waveform: 'triangle' } },
@@ -115,6 +131,7 @@ function buildFallbackProfile(condition: string): {
     };
   } else if (isRainy) {
     poem = 'Rain taps a patient rhythm\non the shoulders of the street\nthe gutters hum their small songs\nwhile umbrellas bloom like flowers.';
+    voice = 'serene_female';
     sound = {
       ...sound,
       tone: { frequency: 100, waveform: 'triangle', gain: 0.12, harmonics: { second: 0.15, third: 0.08, waveform: 'sine' } },
@@ -142,6 +159,7 @@ function buildFallbackProfile(condition: string): {
     };
   } else if (isSnowy) {
     poem = 'Silence dresses the city\nin white linen sheets\neach flake a whispered secret\nthe world becomes a held breath.';
+    voice = 'ethereal_female';
     sound = {
       ...sound,
       tone: { frequency: 220, waveform: 'sine', gain: 0.08, harmonics: { second: 0.05, third: 0.02, waveform: 'sine' } },
@@ -169,6 +187,7 @@ function buildFallbackProfile(condition: string): {
     };
   } else if (isFoggy) {
     poem = 'The city dissolves at its edges\nstreetlights wear halos of gauze\nsound travels strangely here\nas if the air itself is listening.';
+    voice = 'contemplative_male';
     sound = {
       ...sound,
       tone: { frequency: 120, waveform: 'triangle', gain: 0.15, harmonics: { second: 0.2, third: 0.1, waveform: 'sine' } },
@@ -196,6 +215,7 @@ function buildFallbackProfile(condition: string): {
     };
   } else if (isClear) {
     poem = 'The sky opens its blue ledger\nand writes nothing but light\nthe buildings stand sharp-edged\nagainst all that empty brightness.';
+    voice = 'bright_female';
     sound = {
       ...sound,
       tone: { frequency: 250, waveform: 'sine', gain: 0.1, harmonics: { second: 0.08, third: 0.04, waveform: 'sine' } },
@@ -223,6 +243,7 @@ function buildFallbackProfile(condition: string): {
     };
   } else if (isCloudy) {
     poem = 'Grey covers grey in patient layers\nthe light is everywhere and nowhere\npigeons navigate by memory\nthe afternoon has no edges.';
+    voice = 'gentle_female';
     sound = {
       ...sound,
       tone: { frequency: 140, waveform: 'triangle', gain: 0.13, harmonics: { second: 0.12, third: 0.06, waveform: 'sine' } },
@@ -250,7 +271,7 @@ function buildFallbackProfile(condition: string): {
     };
   }
 
-  return { poem, sound, visual };
+  return { poem, sound, visual, voice };
 }
 
 export async function POST(request: NextRequest) {
@@ -288,6 +309,7 @@ export async function POST(request: NextRequest) {
       poem: cached.poem,
       sound: cached.sound,
       visual: cached.visual,
+      voice: cached.voice,
       cached: true,
       _source: 'cache',
     });
@@ -319,6 +341,7 @@ export async function POST(request: NextRequest) {
         poem: fallback.poem,
         sound: fallback.sound,
         visual: fallback.visual,
+        voice: fallback.voice,
         cached: false,
         _source: 'fallback:empty_response',
       });
@@ -327,7 +350,7 @@ export async function POST(request: NextRequest) {
     // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
     rawText = rawText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
 
-    let parsed: { poem?: string; sound?: Partial<SoundscapeProfile>; visual?: Partial<VisualProfile> };
+    let parsed: { poem?: string; sound?: Partial<SoundscapeProfile>; visual?: Partial<VisualProfile>; voice?: string };
     try {
       parsed = JSON.parse(rawText);
     } catch (parseError) {
@@ -338,6 +361,7 @@ export async function POST(request: NextRequest) {
         poem: fallback.poem,
         sound: fallback.sound,
         visual: fallback.visual,
+        voice: fallback.voice,
         cached: false,
         _source: 'fallback:json_parse_error',
       });
@@ -350,10 +374,11 @@ export async function POST(request: NextRequest) {
 
     const sound = clampSoundProfile(parsed.sound ?? {});
     const visual = clampVisualProfile(parsed.visual ?? {});
+    const voice = validateVoicePersona(parsed.voice);
 
-    setCachedMood(cacheKey, poem, sound, visual);
+    setCachedMood(cacheKey, poem, sound, visual, voice);
 
-    return NextResponse.json({ poem, sound, visual, cached: false, _source: 'ai' });
+    return NextResponse.json({ poem, sound, visual, voice, cached: false, _source: 'ai' });
   } catch (err) {
     console.error('Mood generation error:', err);
     return NextResponse.json(

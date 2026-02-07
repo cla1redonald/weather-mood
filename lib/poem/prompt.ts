@@ -54,12 +54,13 @@ export function buildUserMessage(input: PoemInput): string {
 export function buildMoodSystemPrompt(): string {
   return `You are a synesthesia artist. Given a city and its current weather, you design how that specific weather moment looks, sounds, and reads as poetry. Every city and weather combination must feel dramatically unique — the same "rain" in Tokyo should feel completely different from rain in Lagos. Be BOLD with your choices: use vivid saturated colors, varied waveforms, and the full range of every parameter.
 
-CRITICAL: Return ONLY the raw JSON object. No markdown fences (\`\`\`), no "json" label, no explanation before or after. Just the { ... } object. The JSON must have exactly three keys: "poem", "sound", and "visual".
+CRITICAL: Return ONLY the raw JSON object. No markdown fences (\`\`\`), no "json" label, no explanation before or after. Just the { ... } object. The JSON must have exactly four keys: "poem", "sound", "visual", and "voice".
 
 ## Schema
 
 {
   "poem": "string — 4-6 lines of free verse, evocative, sensory, no title, no quotes",
+  "voice": "string — one of: serene_female | warm_male | deep_male | gentle_female | contemplative_male | ethereal_female | storyteller_male | bright_female — pick the voice persona that best fits the city character and weather mood. Guidelines: use deep_male or storyteller_male for stormy/dramatic moods, ethereal_female for fog/snow/mystical moods, warm_male or bright_female for sunny/warm cities, contemplative_male for cold/sparse cities, serene_female for gentle rain/calm moods, gentle_female for warm humid/tropical moods",
   "sound": {
     "tone": {
       "frequency": number (40-400 Hz),
@@ -132,6 +133,7 @@ CRITICAL: Return ONLY the raw JSON object. No markdown fences (\`\`\`), no "json
 ### Bangkok, Thunderstorm, 34°C, 85% humidity, 25 km/h wind, 95% cloud cover
 {
   "poem": "Thunder cracks the wet teak air\\nMotorbikes hiss through flooded soi\\nJasmine and diesel rise together\\nLightning prints the temple spires\\nOn the inside of your eyelids",
+  "voice": "deep_male",
   "sound": {
     "tone": { "frequency": 65, "waveform": "sawtooth", "gain": 0.2, "harmonics": { "second": 0.3, "third": 0.2, "waveform": "triangle" } },
     "wind": { "lfoRate": 3.5, "lfoDepth": 0.4, "lfoWaveform": "triangle", "gustIntensity": 0.8 },
@@ -152,6 +154,7 @@ CRITICAL: Return ONLY the raw JSON object. No markdown fences (\`\`\`), no "json
 ### Reykjavik, Clear, -2°C, 55% humidity, 12 km/h wind, 10% cloud cover
 {
   "poem": "The sun forgets to set\\nbut gives no warmth—\\nlava fields hold yesterday's heat\\nwhile wind combs the grass\\ninto silver sentences",
+  "voice": "contemplative_male",
   "sound": {
     "tone": { "frequency": 280, "waveform": "sine", "gain": 0.08, "harmonics": { "second": 0.05, "third": 0.02, "waveform": "sine" } },
     "wind": { "lfoRate": 0.8, "lfoDepth": 0.15, "lfoWaveform": "sine", "gustIntensity": 0.25 },
@@ -172,6 +175,7 @@ CRITICAL: Return ONLY the raw JSON object. No markdown fences (\`\`\`), no "json
 ### Mumbai, Haze, 31°C, 78% humidity, 8 km/h wind, 70% cloud cover
 {
   "poem": "The city exhales through gauze\\nrickshaw bells dissolve at arm's length\\nsweat maps the small of your back\\ncrows argue above the chai stall\\nwhere sugar and smoke share a spoon",
+  "voice": "gentle_female",
   "sound": {
     "tone": { "frequency": 110, "waveform": "triangle", "gain": 0.18, "harmonics": { "second": 0.25, "third": 0.15, "waveform": "sawtooth" } },
     "wind": { "lfoRate": 0.4, "lfoDepth": 0.08, "lfoWaveform": "sine", "gustIntensity": 0.1 },

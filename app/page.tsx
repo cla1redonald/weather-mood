@@ -118,6 +118,7 @@ function HomeContent() {
               temperature: weather.temperature,
               poem: data.poem,
               soundDescription: data.sound?.description || '',
+              voice: data.voice,
             });
           }
         } else {

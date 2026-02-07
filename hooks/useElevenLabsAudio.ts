@@ -8,6 +8,7 @@ interface FetchAllParams {
   temperature: number;
   poem: string;
   soundDescription: string;
+  voice?: string;
 }
 
 export interface UseElevenLabsAudioReturn {
@@ -237,6 +238,7 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             poem: params.poem,
+            voice: params.voice,
           }),
           signal: controller.signal,
         });

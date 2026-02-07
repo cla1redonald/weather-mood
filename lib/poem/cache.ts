@@ -14,6 +14,7 @@ export interface MoodCacheEntry {
   poem: string;
   sound: SoundscapeProfile;
   visual: VisualProfile;
+  voice: string;
   timestamp: number;
 }
 
@@ -79,11 +80,13 @@ export function setCachedMood(
   poem: string,
   sound: SoundscapeProfile,
   visual: VisualProfile,
+  voice: string,
 ): void {
   moodCache.set(key, {
     poem,
     sound,
     visual,
+    voice,
     timestamp: Date.now(),
   });
 }
