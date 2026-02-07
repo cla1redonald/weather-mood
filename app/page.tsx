@@ -15,14 +15,12 @@ import { useElevenLabsAudio } from '@/hooks/useElevenLabsAudio';
 
 function HomeContent() {
   const searchParams = useSearchParams();
-  const [selectedCity, setSelectedCity] = useState<GeoLocation | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [normalizedParams, setNormalizedParams] = useState<NormalizedParams | null>(null);
   const [condition, setCondition] = useState<WeatherCondition | null>(null);
   const [poem, setPoem] = useState<string | null>(null);
   const [visualProfile, setVisualProfile] = useState<VisualProfile | null>(null);
   const [isLoadingWeather, setIsLoadingWeather] = useState(false);
-  const [isPoemLoading, setIsPoemLoading] = useState(false);
   const [weatherLoaded, setWeatherLoaded] = useState(false);
 
   // Audio — ElevenLabs only (synth removed)
@@ -69,7 +67,6 @@ function HomeContent() {
       window.history.pushState({}, '', url);
 
       // Fetch mood (poem + sound profile + visual profile)
-      setIsPoemLoading(true);
       try {
         const response = await fetch('/api/mood', {
           method: 'POST',
@@ -110,10 +107,6 @@ function HomeContent() {
           console.error('Failed to fetch mood:', error);
         }
         // Silently fail - parametric visuals still work
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsPoemLoading(false);
-        }
       }
     } catch (error: unknown) {
       if ((error as Error)?.name !== 'AbortError') {
@@ -127,13 +120,7 @@ function HomeContent() {
   }, [elevenLabs]);
 
   // Handle city selection
-  const handleCitySelect = useCallback(
-    (city: GeoLocation) => {
-      setSelectedCity(city);
-      loadWeatherForCity(city);
-    },
-    [loadWeatherForCity]
-  );
+  const handleCitySelect = loadWeatherForCity;
 
   // Mute toggle — ElevenLabs audio only
   const handleToggleMute = useCallback(() => {

@@ -3,13 +3,6 @@
  */
 
 export {
-  getCacheKey,
-  getCachedPoem,
-  setCachedPoem,
-  clearCache,
-  getCacheSize,
-} from './cache';
-export {
   buildSystemPrompt,
   buildUserMessage,
   buildMoodSystemPrompt,

@@ -690,3 +690,38 @@ MVP is complete when:
 | Poem feels disconnected from visuals | Elephant (hidden) | Medium | Prompt engineering: include specific weather values, city character. Cache helps iterate on prompts without cost pressure |
 | Open-Meteo rate limiting on high traffic | Tiger (real) | Low | Free tier is generous (10k/day). For a friends-and-community project, won't be an issue |
 | AudioContext resume fails silently | Tiger (real) | Medium | Clear user gesture requirement, visible mute/unmute state, test on iOS Safari |
+
+---
+
+## Creative Vision v2: Every Visit Is a Teleportation
+
+> **Updated:** 2026-02-07
+
+### The Shift
+
+v1 cached creative content by city+condition and used hardcoded cultural mappings (Tokyo = koto, Paris = accordion). This made the experience feel predetermined. v2 makes every single visit fully generative — Claude interprets the weather, the city, and the moment, and everything flows from that single interpretation.
+
+### Core Principles
+
+1. **Unique every time.** Same city, same weather, different visit = different poem, different music, different visuals, different voice. No mood/music/SFX caching.
+2. **Claude is the creative director.** It generates `musicDirection` (a vivid prompt for AI music generation) and `ambienceDirection` (a vivid prompt for AI SFX generation) alongside the poem and visual/sound profiles. No hardcoded city→instrument or city→ambience mappings anywhere.
+3. **Richer weather inputs.** Raw WMO weather code (distinguishing "heavy drizzle" from "light rain"), wind direction (cardinal), and UV index all feed into Claude's interpretation for finer atmospheric differentiation.
+4. **Seamless creative flow.** The poem's emotional arc, the music's genre and tempo, the ambient SFX, and the visual palette all emerge from one unified AI interpretation. They feel like they belong together because they were conceived together.
+5. **Transport, not display.** Typing "Marrakech" should make you feel the heat radiating off terracotta walls. The music should carry the spice market's energy. The poem should name a real street. The SFX should have the distant call to prayer. Every sense works together to place you there.
+
+### What Changed (Technical)
+
+| Aspect | v1 | v2 |
+|--------|----|----|
+| Mood caching | 1hr TTL by city+condition | None — fresh Claude generation every visit |
+| Music prompts | 14 hardcoded city→instrument mappings | Claude generates `musicDirection` per visit |
+| SFX prompts | 14 hardcoded city→ambience mappings | Claude generates `ambienceDirection` per visit |
+| Weather data to AI | condition, temp, humidity, wind, cloud | + WMO code (granular), wind direction, UV index |
+| Music/SFX caching | 1hr TTL by city+condition | None — fresh ElevenLabs generation every visit |
+| Narration caching | By poem hash | Kept (poems are unique, so narration is unique) |
+
+### Success Looks Like (v2)
+
+- Visit Tokyo twice in the same rainy afternoon → two completely different poems, two different musical pieces, two different visual palettes
+- The music for a foggy morning in San Francisco feels nothing like a foggy morning in London — different instruments, different tempo, different emotional register
+- A friend says "it felt like I was actually there" not "cool visualization"
