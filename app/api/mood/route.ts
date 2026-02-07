@@ -1,18 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import {
-  getCacheKey,
-  getCachedMood,
-  setCachedMood,
   buildMoodSystemPrompt,
   buildMoodUserMessage,
 } from '@/lib/poem';
 import type { MoodInput } from '@/lib/poem';
 import {
-  clampSoundProfile,
   clampVisualProfile,
 } from '@/types/mood';
-import type { SoundscapeProfile, VisualProfile } from '@/types/mood';
+import type { VisualProfile } from '@/types/mood';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,7 +28,7 @@ function validateVoicePersona(voice: unknown): string {
 function validateInput(body: unknown): MoodInput | null {
   if (typeof body !== 'object' || body === null) return null;
 
-  const { city, temperature, condition, humidity, windSpeed, cloudCover } =
+  const { city, temperature, condition, humidity, windSpeed, cloudCover, weatherCode, windDirection, uvIndex } =
     body as Record<string, unknown>;
 
   if (typeof city !== 'string' || city.trim().length === 0) return null;
@@ -49,6 +45,9 @@ function validateInput(body: unknown): MoodInput | null {
     humidity,
     windSpeed,
     cloudCover,
+    weatherCode: typeof weatherCode === 'number' ? weatherCode : 0,
+    windDirection: typeof windDirection === 'number' ? windDirection : 0,
+    uvIndex: typeof uvIndex === 'number' ? uvIndex : 0,
   };
 }
 
@@ -58,9 +57,10 @@ function validateInput(body: unknown): MoodInput | null {
  */
 function buildFallbackProfile(condition: string): {
   poem: string;
-  sound: SoundscapeProfile;
   visual: VisualProfile;
   voice: string;
+  musicDirection: string;
+  ambienceDirection: string;
 } {
   const lower = condition.toLowerCase();
 
@@ -72,16 +72,6 @@ function buildFallbackProfile(condition: string): {
   const isFoggy = lower.includes('fog') || lower.includes('mist') || lower.includes('haze');
 
   let poem = 'The weather wraps the city\nin its quiet, shifting cloak\nmoments pass like clouds\nabove the rooftops.';
-
-  let sound: SoundscapeProfile = {
-    tone: { frequency: 150, waveform: 'sine', gain: 0.12, harmonics: { second: 0.1, third: 0.05, waveform: 'sine' } },
-    wind: { lfoRate: 1.0, lfoDepth: 0.15, lfoWaveform: 'sine', gustIntensity: 0.2 },
-    filter: { cutoff: 3000, Q: 1.0, highShelfGain: -3 },
-    precipitation: { active: false, noiseColor: 'pink', centerFrequency: 2000, Q: 0.5, gain: 0 },
-    thunder: { active: false, intensity: 0, intervalMin: 5, intervalMax: 15 },
-    master: { gain: 0.75 },
-    description: 'Gentle ambient drone',
-  };
 
   let visual: VisualProfile = {
     background: { topColor: [120, 140, 170], bottomColor: [160, 175, 200], style: 'linear' },
@@ -100,20 +90,14 @@ function buildFallbackProfile(condition: string): {
   };
 
   let voice = 'serene_female'; // default
+  let musicDirection = 'Gentle ambient piano with soft string pads, unhurried and contemplative. A simple repeating melody that feels like watching clouds drift. Around 65 BPM, warm and meditative.';
+  let ambienceDirection = 'A quiet city street: distant traffic hum, occasional footsteps, a gentle breeze carrying indistinct sounds. Calm and unremarkable, like a moment between moments.';
 
   if (isStormy) {
     poem = 'Thunder rolls through the streets\nrain hammers the tin awnings\nlightning splits the dusk\nthe city holds its breath.';
     voice = 'deep_male';
-    sound = {
-      ...sound,
-      tone: { frequency: 70, waveform: 'sawtooth', gain: 0.22, harmonics: { second: 0.3, third: 0.2, waveform: 'triangle' } },
-      wind: { lfoRate: 3.5, lfoDepth: 0.4, lfoWaveform: 'triangle', gustIntensity: 0.8 },
-      filter: { cutoff: 900, Q: 1.5, highShelfGain: -8 },
-      precipitation: { active: true, noiseColor: 'brown', centerFrequency: 1200, Q: 0.8, gain: 0.2 },
-      thunder: { active: true, intensity: 0.85, intervalMin: 4, intervalMax: 12 },
-      master: { gain: 0.9 },
-      description: 'Deep stormy drone with heavy rain and thunder',
-    };
+    musicDirection = 'Dramatic orchestral swells with deep timpani rolls, low brass drones building tension, and distorted cello stabs. Minor key, around 70 BPM, cinematic and foreboding — like the sky is about to split open.';
+    ambienceDirection = 'A violent urban thunderstorm: heavy rain hammering metal awnings, deep chest-rattling thunder, wind gusting through narrow streets, water rushing through gutters. Brief moments of eerie quiet between strikes.';
     visual = {
       background: { topColor: [20, 25, 35], bottomColor: [40, 50, 65], style: 'linear' },
       particles: {
@@ -132,16 +116,8 @@ function buildFallbackProfile(condition: string): {
   } else if (isRainy) {
     poem = 'Rain taps a patient rhythm\non the shoulders of the street\nthe gutters hum their small songs\nwhile umbrellas bloom like flowers.';
     voice = 'serene_female';
-    sound = {
-      ...sound,
-      tone: { frequency: 100, waveform: 'triangle', gain: 0.12, harmonics: { second: 0.15, third: 0.08, waveform: 'sine' } },
-      wind: { lfoRate: 1.5, lfoDepth: 0.2, lfoWaveform: 'sine', gustIntensity: 0.35 },
-      filter: { cutoff: 2000, Q: 1.2, highShelfGain: -5 },
-      precipitation: { active: true, noiseColor: 'pink', centerFrequency: 3000, Q: 0.6, gain: 0.15 },
-      thunder: { active: false, intensity: 0, intervalMin: 5, intervalMax: 15 },
-      master: { gain: 0.8 },
-      description: 'Gentle rain with warm triangle drone',
-    };
+    musicDirection = 'Intimate jazz piano with brushed snare and muted upright bass. Reverb-heavy, like playing in an empty room with rain on the windows. Bittersweet major 7th chords, around 62 BPM, gentle and reflective.';
+    ambienceDirection = 'Soft rain on varied surfaces — leaves, stone, metal awnings. Water dripping from eaves into puddles with gentle plops. The rain creates a curtain of white noise, with occasional car tires hissing on wet asphalt in the distance.';
     visual = {
       background: { topColor: [60, 75, 95], bottomColor: [90, 105, 125], style: 'linear' },
       particles: {
@@ -160,16 +136,8 @@ function buildFallbackProfile(condition: string): {
   } else if (isSnowy) {
     poem = 'Silence dresses the city\nin white linen sheets\neach flake a whispered secret\nthe world becomes a held breath.';
     voice = 'ethereal_female';
-    sound = {
-      ...sound,
-      tone: { frequency: 220, waveform: 'sine', gain: 0.08, harmonics: { second: 0.05, third: 0.02, waveform: 'sine' } },
-      wind: { lfoRate: 0.6, lfoDepth: 0.1, lfoWaveform: 'sine', gustIntensity: 0.15 },
-      filter: { cutoff: 4500, Q: 0.8, highShelfGain: -2 },
-      precipitation: { active: true, noiseColor: 'white', centerFrequency: 4500, Q: 0.3, gain: 0.06 },
-      thunder: { active: false, intensity: 0, intervalMin: 5, intervalMax: 15 },
-      master: { gain: 0.65 },
-      description: 'Crystalline sine with soft white noise snowfall',
-    };
+    musicDirection = 'Sparse crystalline piano with enormous reverb, like notes dropping into a frozen lake. Ethereal bowed glass or sustained strings. Extremely slow, around 48 BPM, with long silences between phrases. Cold, vast, and delicate.';
+    ambienceDirection = 'A muffled snowfall: the world wrapped in cotton. Snow absorbs all sound. Occasional crunch of boots on fresh powder, a distant crow call, the faint whisper of flakes landing. The silence itself is almost audible.';
     visual = {
       background: { topColor: [180, 195, 215], bottomColor: [220, 230, 245], style: 'linear' },
       particles: {
@@ -188,16 +156,8 @@ function buildFallbackProfile(condition: string): {
   } else if (isFoggy) {
     poem = 'The city dissolves at its edges\nstreetlights wear halos of gauze\nsound travels strangely here\nas if the air itself is listening.';
     voice = 'contemplative_male';
-    sound = {
-      ...sound,
-      tone: { frequency: 120, waveform: 'triangle', gain: 0.15, harmonics: { second: 0.2, third: 0.1, waveform: 'sine' } },
-      wind: { lfoRate: 0.3, lfoDepth: 0.08, lfoWaveform: 'sine', gustIntensity: 0.1 },
-      filter: { cutoff: 1500, Q: 1.8, highShelfGain: -7 },
-      precipitation: { active: false, noiseColor: 'pink', centerFrequency: 2000, Q: 0.5, gain: 0 },
-      thunder: { active: false, intensity: 0, intervalMin: 5, intervalMax: 15 },
-      master: { gain: 0.7 },
-      description: 'Muffled triangle drone with heavy filtering',
-    };
+    musicDirection = 'Blurred ambient textures — notes that bleed into each other with heavy reverb and delay. Bowed vibraphone or marimba with tape-degraded quality. Mysterious, around 55 BPM, like sound traveling through thick damp air. Disorienting and beautiful.';
+    ambienceDirection = 'Dense fog muffling a city: sounds arrive distorted — a foghorn in the distance, footsteps that seem closer than they are, dripping condensation from overhead wires, muted traffic hum. Dreamlike acoustic space where nothing is quite where it seems.';
     visual = {
       background: { topColor: [160, 165, 170], bottomColor: [190, 195, 200], style: 'radial' },
       particles: {
@@ -216,16 +176,8 @@ function buildFallbackProfile(condition: string): {
   } else if (isClear) {
     poem = 'The sky opens its blue ledger\nand writes nothing but light\nthe buildings stand sharp-edged\nagainst all that empty brightness.';
     voice = 'bright_female';
-    sound = {
-      ...sound,
-      tone: { frequency: 250, waveform: 'sine', gain: 0.1, harmonics: { second: 0.08, third: 0.04, waveform: 'sine' } },
-      wind: { lfoRate: 0.5, lfoDepth: 0.1, lfoWaveform: 'sine', gustIntensity: 0.15 },
-      filter: { cutoff: 5000, Q: 0.6, highShelfGain: -1 },
-      precipitation: { active: false, noiseColor: 'white', centerFrequency: 4000, Q: 0.5, gain: 0 },
-      thunder: { active: false, intensity: 0, intervalMin: 5, intervalMax: 15 },
-      master: { gain: 0.7 },
-      description: 'Clean bright sine with open filter and gentle wind',
-    };
+    musicDirection = 'Bright acoustic guitar arpeggios over warm analog synth pads, with a gentle shaker keeping time. Open major chords, around 85 BPM, optimistic and sun-drenched — like golden hour stretching into forever.';
+    ambienceDirection = 'A clear day in the city: birdsong specific to the region, a gentle breeze rustling leaves, distant children playing, the warmth almost audible in the soft hum of the air. Footsteps on sun-warmed pavement, an occasional bicycle bell.';
     visual = {
       background: { topColor: [80, 140, 220], bottomColor: [160, 200, 240], style: 'linear' },
       particles: {
@@ -244,16 +196,8 @@ function buildFallbackProfile(condition: string): {
   } else if (isCloudy) {
     poem = 'Grey covers grey in patient layers\nthe light is everywhere and nowhere\npigeons navigate by memory\nthe afternoon has no edges.';
     voice = 'gentle_female';
-    sound = {
-      ...sound,
-      tone: { frequency: 140, waveform: 'triangle', gain: 0.13, harmonics: { second: 0.12, third: 0.06, waveform: 'sine' } },
-      wind: { lfoRate: 0.8, lfoDepth: 0.12, lfoWaveform: 'sine', gustIntensity: 0.2 },
-      filter: { cutoff: 2500, Q: 1.0, highShelfGain: -4 },
-      precipitation: { active: false, noiseColor: 'pink', centerFrequency: 2000, Q: 0.5, gain: 0 },
-      thunder: { active: false, intensity: 0, intervalMin: 5, intervalMax: 15 },
-      master: { gain: 0.75 },
-      description: 'Soft triangle drone with moderate filtering',
-    };
+    musicDirection = 'Contemplative ambient with soft Rhodes piano, gentle cello sustained notes, and warm tape-saturated pads. Muted and cozy, around 68 BPM, like light filtering through linen curtains. Thoughtful without being sad.';
+    ambienceDirection = 'An overcast afternoon: the muted hush of cloud cover pressing sound down. Pigeons cooing on a ledge, a distant tram or bus, the occasional rustle of a newspaper in the breeze. Everything feels closer, more contained, quieter than usual.';
     visual = {
       background: { topColor: [130, 140, 155], bottomColor: [170, 180, 195], style: 'linear' },
       particles: {
@@ -271,7 +215,7 @@ function buildFallbackProfile(condition: string): {
     };
   }
 
-  return { poem, sound, visual, voice };
+  return { poem, visual, voice, musicDirection, ambienceDirection };
 }
 
 export async function POST(request: NextRequest) {
@@ -301,21 +245,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Check cache
-  const cacheKey = getCacheKey(input.city, input.condition);
-  const cached = getCachedMood(cacheKey);
-  if (cached) {
-    return NextResponse.json({
-      poem: cached.poem,
-      sound: cached.sound,
-      visual: cached.visual,
-      voice: cached.voice,
-      cached: true,
-      _source: 'cache',
-    });
-  }
-
-  // Generate mood profile via Claude API
+  // Generate mood profile via Claude API (fresh every visit — no caching)
   try {
     const client = new Anthropic({ apiKey });
     const message = await client.messages.create({
@@ -339,9 +269,10 @@ export async function POST(request: NextRequest) {
       const fallback = buildFallbackProfile(input.condition);
       return NextResponse.json({
         poem: fallback.poem,
-        sound: fallback.sound,
         visual: fallback.visual,
         voice: fallback.voice,
+        musicDirection: fallback.musicDirection,
+        ambienceDirection: fallback.ambienceDirection,
         cached: false,
         _source: 'fallback:empty_response',
       });
@@ -350,7 +281,7 @@ export async function POST(request: NextRequest) {
     // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
     rawText = rawText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
 
-    let parsed: { poem?: string; sound?: Partial<SoundscapeProfile>; visual?: Partial<VisualProfile>; voice?: string };
+    let parsed: { poem?: string; visual?: Partial<VisualProfile>; voice?: string; musicDirection?: string; ambienceDirection?: string };
     try {
       parsed = JSON.parse(rawText);
     } catch (parseError) {
@@ -359,26 +290,32 @@ export async function POST(request: NextRequest) {
       const fallback = buildFallbackProfile(input.condition);
       return NextResponse.json({
         poem: fallback.poem,
-        sound: fallback.sound,
         visual: fallback.visual,
         voice: fallback.voice,
+        musicDirection: fallback.musicDirection,
+        ambienceDirection: fallback.ambienceDirection,
         cached: false,
         _source: 'fallback:json_parse_error',
       });
     }
 
+    const fallback = buildFallbackProfile(input.condition);
+
     const poem =
       typeof parsed.poem === 'string' && parsed.poem.trim().length > 0
         ? parsed.poem.trim()
-        : buildFallbackProfile(input.condition).poem;
+        : fallback.poem;
 
-    const sound = clampSoundProfile(parsed.sound ?? {});
     const visual = clampVisualProfile(parsed.visual ?? {});
     const voice = validateVoicePersona(parsed.voice);
+    const musicDirection = typeof parsed.musicDirection === 'string' && parsed.musicDirection.trim().length > 0
+      ? parsed.musicDirection.trim()
+      : fallback.musicDirection;
+    const ambienceDirection = typeof parsed.ambienceDirection === 'string' && parsed.ambienceDirection.trim().length > 0
+      ? parsed.ambienceDirection.trim()
+      : fallback.ambienceDirection;
 
-    setCachedMood(cacheKey, poem, sound, visual, voice);
-
-    return NextResponse.json({ poem, sound, visual, voice, cached: false, _source: 'ai' });
+    return NextResponse.json({ poem, visual, voice, musicDirection, ambienceDirection, cached: false, _source: 'ai' });
   } catch (err) {
     console.error('Mood generation error:', err);
     return NextResponse.json(

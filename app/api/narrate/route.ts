@@ -133,10 +133,32 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const buffer = await response.arrayBuffer();
-    setCachedAudio(cacheKey, buffer);
+    const [clientStream, cacheStream] = response.body!.tee();
 
-    return new NextResponse(buffer, {
+    // Fire-and-forget: collect cacheStream into buffer for cache
+    (async () => {
+      try {
+        const reader = cacheStream.getReader();
+        const chunks: Uint8Array[] = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) chunks.push(value);
+        }
+        const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+        const buffer = new Uint8Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+          buffer.set(chunk, offset);
+          offset += chunk.length;
+        }
+        setCachedAudio(cacheKey, buffer.buffer as ArrayBuffer);
+      } catch (err) {
+        console.error('Failed to cache narration:', err);
+      }
+    })();
+
+    return new NextResponse(clientStream, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'X-Source': 'ai',

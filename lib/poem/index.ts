@@ -6,13 +6,9 @@ export {
   getCacheKey,
   getCachedPoem,
   setCachedPoem,
-  getCachedMood,
-  setCachedMood,
   clearCache,
   getCacheSize,
-  getMoodCacheSize,
 } from './cache';
-export type { MoodCacheEntry } from './cache';
 export {
   buildSystemPrompt,
   buildUserMessage,

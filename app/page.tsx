@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import type { GeoLocation, WeatherData, NormalizedParams, WeatherCondition } from '@/types/weather';
-import type { SoundscapeProfile, VisualProfile } from '@/types/mood';
+import type { VisualProfile } from '@/types/mood';
 import { fetchWeather } from '@/lib/weather/api';
 import { normalizeParams } from '@/lib/weather/params';
 import WeatherCanvas from '@/components/WeatherCanvas';
@@ -11,11 +11,7 @@ import CitySearch from '@/components/CitySearch';
 import WeatherInfo from '@/components/WeatherInfo';
 import MuteToggle from '@/components/MuteToggle';
 import PoemOverlay from '@/components/PoemOverlay';
-import { useWeatherAudio } from '@/hooks/useWeatherAudio';
 import { useElevenLabsAudio } from '@/hooks/useElevenLabsAudio';
-
-const SYNTH_DUCKED_VOLUME = 0; // Synth fully silent when ElevenLabs audio is playing — let the real music breathe
-const SYNTH_FULL_VOLUME = 1.0;
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -24,28 +20,14 @@ function HomeContent() {
   const [normalizedParams, setNormalizedParams] = useState<NormalizedParams | null>(null);
   const [condition, setCondition] = useState<WeatherCondition | null>(null);
   const [poem, setPoem] = useState<string | null>(null);
-  const [soundProfile, setSoundProfile] = useState<SoundscapeProfile | null>(null);
   const [visualProfile, setVisualProfile] = useState<VisualProfile | null>(null);
   const [isLoadingWeather, setIsLoadingWeather] = useState(false);
   const [isPoemLoading, setIsPoemLoading] = useState(false);
   const [weatherLoaded, setWeatherLoaded] = useState(false);
 
-  // Audio hooks
-  const { mute: muteSynth, unmute: unmuteSynth, isMuted: isSynthMuted, startOnGesture, setVolume: setSynthVolume } =
-    useWeatherAudio(normalizedParams, condition, soundProfile);
+  // Audio — ElevenLabs only (synth removed)
   const elevenLabs = useElevenLabsAudio();
-
-  // Unified mute state (both synth and ElevenLabs mute together)
-  const isMuted = isSynthMuted;
-
-  // Duck synth when ElevenLabs audio arrives
-  useEffect(() => {
-    if (elevenLabs.hasAudio && !isMuted) {
-      setSynthVolume(SYNTH_DUCKED_VOLUME);
-    } else if (!elevenLabs.hasAudio) {
-      setSynthVolume(SYNTH_FULL_VOLUME);
-    }
-  }, [elevenLabs.hasAudio, isMuted, setSynthVolume]);
+  const isMuted = elevenLabs.isMuted;
 
   // Ref to track abort controller for cancelling previous requests
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -64,7 +46,6 @@ function HomeContent() {
     setIsLoadingWeather(true);
     setWeatherLoaded(false);
     setPoem(null); // Fade out old poem immediately
-    setSoundProfile(null); // Clear old profiles
     setVisualProfile(null);
 
     try {
@@ -100,6 +81,9 @@ function HomeContent() {
             humidity: weather.humidity,
             windSpeed: weather.windSpeed,
             cloudCover: weather.cloudCover,
+            weatherCode: weather.weatherCode,
+            windDirection: weather.windDirection,
+            uvIndex: weather.uvIndex,
           }),
           signal: controller.signal,
         });
@@ -108,17 +92,14 @@ function HomeContent() {
           const data = await response.json();
           if (!controller.signal.aborted) {
             setPoem(data.poem);
-            if (data.sound) setSoundProfile(data.sound);
             if (data.visual) setVisualProfile(data.visual);
 
             // Trigger ElevenLabs audio (music + SFX + narration) in parallel
             elevenLabs.fetchAll({
-              city: city.name,
-              condition: weather.condition,
-              temperature: weather.temperature,
               poem: data.poem,
-              soundDescription: data.sound?.description || '',
               voice: data.voice,
+              musicDirection: data.musicDirection || '',
+              ambienceDirection: data.ambienceDirection || '',
             });
           }
         } else {
@@ -128,7 +109,7 @@ function HomeContent() {
         if ((error as Error)?.name !== 'AbortError') {
           console.error('Failed to fetch mood:', error);
         }
-        // Silently fail - parametric visuals and audio still work
+        // Silently fail - parametric visuals still work
       } finally {
         if (!controller.signal.aborted) {
           setIsPoemLoading(false);
@@ -145,26 +126,23 @@ function HomeContent() {
     }
   }, [elevenLabs]);
 
-  // Handle city selection — also auto-starts audio (user gesture)
+  // Handle city selection
   const handleCitySelect = useCallback(
     (city: GeoLocation) => {
       setSelectedCity(city);
-      startOnGesture(); // Resume AudioContext from this click gesture
       loadWeatherForCity(city);
     },
-    [loadWeatherForCity, startOnGesture]
+    [loadWeatherForCity]
   );
 
-  // Unified mute toggle — controls both synth and ElevenLabs
+  // Mute toggle — ElevenLabs audio only
   const handleToggleMute = useCallback(() => {
     if (isMuted) {
-      unmuteSynth();
       elevenLabs.unmute();
     } else {
-      muteSynth();
       elevenLabs.mute();
     }
-  }, [isMuted, muteSynth, unmuteSynth, elevenLabs]);
+  }, [isMuted, elevenLabs]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -184,7 +162,7 @@ function HomeContent() {
   return (
     <main className="fixed inset-0 w-screen h-screen overflow-hidden bg-black">
       {/* Layer 1: Canvas (z-0) */}
-      <WeatherCanvas condition={condition} params={normalizedParams} visualProfile={visualProfile} />
+      <WeatherCanvas condition={condition} params={normalizedParams} visualProfile={visualProfile} isAudioLoading={elevenLabs.isLoading} />
 
       {/* Layer 2: Poem Overlay (z-10) */}
       <PoemOverlay poem={poem} weatherLoaded={weatherLoaded} />

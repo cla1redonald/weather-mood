@@ -9,9 +9,10 @@ interface WeatherCanvasProps {
   condition: WeatherCondition | null;
   params: NormalizedParams | null;
   visualProfile?: VisualProfile | null;
+  isAudioLoading?: boolean;
 }
 
-export default function WeatherCanvas({ condition, params, visualProfile }: WeatherCanvasProps) {
+export default function WeatherCanvas({ condition, params, visualProfile, isAudioLoading }: WeatherCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
 
@@ -46,11 +47,24 @@ export default function WeatherCanvas({ condition, params, visualProfile }: Weat
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="fixed inset-0 w-full h-full"
-      style={{ zIndex: 0 }}
-      aria-hidden="true"
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className="fixed inset-0 w-full h-full"
+        style={{ zIndex: 0 }}
+        aria-hidden="true"
+      />
+      {isAudioLoading && (
+        <div
+          className="fixed inset-0 pointer-events-none"
+          style={{
+            zIndex: 1,
+            animation: 'pulse-overlay 2s ease-in-out infinite',
+            background: 'radial-gradient(circle at center, rgba(255,255,255,0.06) 0%, transparent 70%)',
+          }}
+          aria-hidden="true"
+        />
+      )}
+    </>
   );
 }

@@ -3,47 +3,6 @@
  * Claude generates these parameters alongside the poem.
  */
 
-export interface SoundscapeProfile {
-  tone: {
-    frequency: number;       // 40-400 Hz
-    waveform: OscillatorType; // 'sine' | 'triangle' | 'sawtooth' | 'square'
-    gain: number;            // 0-0.3
-    harmonics: {
-      second: number;        // 0-0.4 (gain of 2nd overtone)
-      third: number;         // 0-0.3 (gain of 3rd overtone)
-      waveform: OscillatorType;
-    };
-  };
-  wind: {
-    lfoRate: number;         // 0.1-6 Hz
-    lfoDepth: number;        // 0-0.5
-    lfoWaveform: 'sine' | 'triangle';
-    gustIntensity: number;   // 0-1 (simplex noise modulation depth)
-  };
-  filter: {
-    cutoff: number;          // 200-6000 Hz
-    Q: number;               // 0.5-4
-    highShelfGain: number;   // -12 to 0 dB
-  };
-  precipitation: {
-    active: boolean;
-    noiseColor: 'white' | 'pink' | 'brown';
-    centerFrequency: number; // 500-6000 Hz
-    Q: number;               // 0.2-2
-    gain: number;            // 0-0.25
-  };
-  thunder: {
-    active: boolean;
-    intensity: number;       // 0-1
-    intervalMin: number;     // 3-10 seconds
-    intervalMax: number;     // 8-20 seconds
-  };
-  master: {
-    gain: number;            // 0.5-1.0
-  };
-  description: string;
-}
-
 export type RGB = [number, number, number];
 
 export interface VisualProfile {
@@ -74,8 +33,10 @@ export interface VisualProfile {
 
 export interface MoodResponse {
   poem: string;
-  sound: SoundscapeProfile;
   visual: VisualProfile;
+  voice: string;
+  musicDirection: string;
+  ambienceDirection: string;
   cached: boolean;
 }
 
@@ -92,58 +53,6 @@ function clampRGB(rgb: unknown): RGB {
     clamp(Math.round(rgb[1] ?? 128), 0, 255),
     clamp(Math.round(rgb[2] ?? 128), 0, 255),
   ];
-}
-
-/** Validate and clamp a SoundscapeProfile from AI output */
-export function clampSoundProfile(raw: Partial<SoundscapeProfile>): SoundscapeProfile {
-  const tone = raw.tone ?? {} as Partial<SoundscapeProfile['tone']>;
-  const harmonics = tone.harmonics ?? {} as Partial<SoundscapeProfile['tone']['harmonics']>;
-  const wind = raw.wind ?? {} as Partial<SoundscapeProfile['wind']>;
-  const filter = raw.filter ?? {} as Partial<SoundscapeProfile['filter']>;
-  const precip = raw.precipitation ?? {} as Partial<SoundscapeProfile['precipitation']>;
-  const thunder = raw.thunder ?? {} as Partial<SoundscapeProfile['thunder']>;
-  const master = raw.master ?? {} as Partial<SoundscapeProfile['master']>;
-
-  return {
-    tone: {
-      frequency: clamp(tone.frequency ?? 150, 40, 400),
-      waveform: validateWaveform(tone.waveform, 'sine'),
-      gain: clamp(tone.gain ?? 0.15, 0, 0.3),
-      harmonics: {
-        second: clamp(harmonics.second ?? 0.1, 0, 0.4),
-        third: clamp(harmonics.third ?? 0.05, 0, 0.3),
-        waveform: validateWaveform(harmonics.waveform, 'sine'),
-      },
-    },
-    wind: {
-      lfoRate: clamp(wind.lfoRate ?? 1, 0.1, 6),
-      lfoDepth: clamp(wind.lfoDepth ?? 0.1, 0, 0.5),
-      lfoWaveform: wind.lfoWaveform === 'triangle' ? 'triangle' : 'sine',
-      gustIntensity: clamp(wind.gustIntensity ?? 0.3, 0, 1),
-    },
-    filter: {
-      cutoff: clamp(filter.cutoff ?? 3000, 200, 6000),
-      Q: clamp(filter.Q ?? 1, 0.5, 4),
-      highShelfGain: clamp(filter.highShelfGain ?? 0, -12, 0),
-    },
-    precipitation: {
-      active: precip.active ?? false,
-      noiseColor: validateNoiseColor(precip.noiseColor),
-      centerFrequency: clamp(precip.centerFrequency ?? 2000, 500, 6000),
-      Q: clamp(precip.Q ?? 0.5, 0.2, 2),
-      gain: clamp(precip.gain ?? 0.1, 0, 0.25),
-    },
-    thunder: {
-      active: thunder.active ?? false,
-      intensity: clamp(thunder.intensity ?? 0.5, 0, 1),
-      intervalMin: clamp(thunder.intervalMin ?? 5, 3, 10),
-      intervalMax: clamp(thunder.intervalMax ?? 15, 8, 20),
-    },
-    master: {
-      gain: clamp(master.gain ?? 0.8, 0.5, 1),
-    },
-    description: raw.description ?? '',
-  };
 }
 
 /** Validate and clamp a VisualProfile from AI output */
@@ -200,16 +109,6 @@ export function clampVisualProfile(raw: Partial<VisualProfile>): VisualProfile {
     },
     description: raw.description ?? '',
   };
-}
-
-function validateWaveform(value: unknown, fallback: OscillatorType): OscillatorType {
-  const valid: OscillatorType[] = ['sine', 'triangle', 'sawtooth', 'square'];
-  return valid.includes(value as OscillatorType) ? (value as OscillatorType) : fallback;
-}
-
-function validateNoiseColor(value: unknown): 'white' | 'pink' | 'brown' {
-  const valid = ['white', 'pink', 'brown'];
-  return valid.includes(value as string) ? (value as 'white' | 'pink' | 'brown') : 'pink';
 }
 
 function validateDirection(value: unknown): VisualProfile['particles']['direction'] {

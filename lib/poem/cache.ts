@@ -3,7 +3,7 @@
  * Resets on cold start (Vercel Edge Function), which is acceptable for this project.
  */
 
-import type { SoundscapeProfile, VisualProfile } from '@/types/mood';
+import type { VisualProfile } from '@/types/mood';
 
 interface CacheEntry {
   poem: string;
@@ -12,7 +12,6 @@ interface CacheEntry {
 
 export interface MoodCacheEntry {
   poem: string;
-  sound: SoundscapeProfile;
   visual: VisualProfile;
   voice: string;
   timestamp: number;
@@ -78,13 +77,11 @@ export function getCachedMood(key: string, ttlMs: number = DEFAULT_TTL_MS): Mood
 export function setCachedMood(
   key: string,
   poem: string,
-  sound: SoundscapeProfile,
   visual: VisualProfile,
   voice: string,
 ): void {
   moodCache.set(key, {
     poem,
-    sound,
     visual,
     voice,
     timestamp: Date.now(),

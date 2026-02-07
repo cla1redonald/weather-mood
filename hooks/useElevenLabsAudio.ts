@@ -3,12 +3,10 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 
 interface FetchAllParams {
-  city: string;
-  condition: string;
-  temperature: number;
   poem: string;
-  soundDescription: string;
   voice?: string;
+  musicDirection: string;
+  ambienceDirection: string;
 }
 
 export interface UseElevenLabsAudioReturn {
@@ -28,6 +26,7 @@ export interface UseElevenLabsAudioReturn {
 
 // Volume targets for each layer
 const MUSIC_VOLUME = 0.5;
+const MUSIC_DUCKED_VOLUME = 0.12; // Quiet bed under narration
 const SFX_VOLUME = 0.3;
 const NARRATION_VOLUME = 0.8;
 
@@ -67,6 +66,153 @@ function fadeVolume(
 }
 
 /**
+ * Check if the browser supports MediaSource Extensions for audio/mpeg streaming.
+ */
+function canUseMediaSource(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof MediaSource !== 'undefined' &&
+    MediaSource.isTypeSupported('audio/mpeg')
+  );
+}
+
+/**
+ * Stream audio progressively using MediaSource API.
+ * Starts playback after the first chunk arrives rather than waiting for the full download.
+ *
+ * @param audio - The HTMLAudioElement to play into
+ * @param response - The fetch Response with a readable body stream
+ * @param signal - AbortSignal to cancel streaming
+ * @param onPlaybackStarted - Callback fired when playback actually begins
+ * @param blobUrls - Array to push the MediaSource object URL into for cleanup
+ * @returns Promise that resolves when streaming is complete
+ */
+async function playProgressively(
+  audio: HTMLAudioElement,
+  response: Response,
+  signal: AbortSignal,
+  onPlaybackStarted: () => void,
+  blobUrls: string[],
+): Promise<void> {
+  const mediaSource = new MediaSource();
+  const objectUrl = URL.createObjectURL(mediaSource);
+  blobUrls.push(objectUrl);
+  audio.src = objectUrl;
+
+  return new Promise<void>((resolve, reject) => {
+    mediaSource.addEventListener(
+      'sourceopen',
+      () => {
+        let sourceBuffer: SourceBuffer;
+        try {
+          sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+        } catch (err) {
+          console.error('[ElevenLabs] Failed to create SourceBuffer:', err);
+          reject(err);
+          return;
+        }
+
+        const reader = response.body!.getReader();
+        const queue: Uint8Array[] = [];
+        let playbackStarted = false;
+        let streamDone = false;
+
+        function appendNext() {
+          if (
+            queue.length > 0 &&
+            !sourceBuffer.updating &&
+            mediaSource.readyState === 'open'
+          ) {
+            try {
+              const chunk = queue.shift()!;
+              // Create a new ArrayBuffer copy to satisfy TypeScript's BufferSource type
+              const buffer = new ArrayBuffer(chunk.byteLength);
+              new Uint8Array(buffer).set(chunk);
+              sourceBuffer.appendBuffer(buffer);
+            } catch (err) {
+              console.error('[ElevenLabs] SourceBuffer append error:', err);
+              // Don't reject here — the stream may still be usable
+            }
+          } else if (
+            queue.length === 0 &&
+            streamDone &&
+            !sourceBuffer.updating &&
+            mediaSource.readyState === 'open'
+          ) {
+            try {
+              mediaSource.endOfStream();
+            } catch (err) {
+              // endOfStream can throw if the source is already ended
+              console.warn('[ElevenLabs] endOfStream warning:', err);
+            }
+            resolve();
+          }
+        }
+
+        sourceBuffer.addEventListener('updateend', () => {
+          // Start playback after first chunk is buffered
+          if (!playbackStarted && audio.buffered.length > 0) {
+            playbackStarted = true;
+            audio.volume = 0;
+            audio
+              .play()
+              .then(onPlaybackStarted)
+              .catch((err) => {
+                console.error(
+                  '[ElevenLabs] Progressive play() failed:',
+                  err,
+                );
+              });
+          }
+          appendNext();
+        });
+
+        // Read the stream
+        async function readStream() {
+          try {
+            while (true) {
+              if (signal.aborted) {
+                reader.cancel();
+                resolve();
+                return;
+              }
+              const { done, value } = await reader.read();
+              if (done) {
+                streamDone = true;
+                appendNext(); // Trigger endOfStream check
+                return;
+              }
+              queue.push(value);
+              appendNext();
+            }
+          } catch (err: unknown) {
+            if ((err as Error)?.name !== 'AbortError') {
+              console.error('[ElevenLabs] Stream read error:', err);
+              reject(err);
+            } else {
+              resolve();
+            }
+          }
+        }
+
+        readStream();
+      },
+      { once: true },
+    );
+
+    // Handle MediaSource errors
+    mediaSource.addEventListener(
+      'error',
+      () => {
+        console.error('[ElevenLabs] MediaSource error event');
+        reject(new Error('MediaSource error'));
+      },
+      { once: true },
+    );
+  });
+}
+
+/**
  * React hook that manages all three ElevenLabs audio streams:
  * - Music (loops continuously)
  * - Sound effects (loops continuously)
@@ -80,6 +226,7 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
   const narrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isMuted, setIsMuted] = useState(true);
+  const isMutedRef = useRef(true); // Ref stays current across async closures
   const [isLoading, setIsLoading] = useState(false);
   const [hasAudio, setHasAudio] = useState(false);
 
@@ -93,7 +240,8 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
     blobUrlsRef.current = [];
   }
 
-  function stopAll() {
+  /** Immediately pause, clear sources, revoke blobs, clear timers, reset state. */
+  function cleanupAudioRefs() {
     if (musicRef.current) {
       musicRef.current.pause();
       musicRef.current.src = '';
@@ -114,6 +262,38 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
     setHasAudio(false);
   }
 
+  /** Fade out all active audio over STOP_FADE_MS, then clean up. Resolves when done. */
+  function stopAll(): Promise<void> {
+    const STOP_FADE_MS = 400;
+    const hasPlaying =
+      (musicRef.current && !musicRef.current.paused) ||
+      (sfxRef.current && !sfxRef.current.paused) ||
+      (narrationRef.current && !narrationRef.current.paused);
+
+    if (!hasPlaying) {
+      cleanupAudioRefs();
+      return Promise.resolve();
+    }
+
+    // Fade all active elements to 0
+    if (musicRef.current && !musicRef.current.paused) {
+      fadeVolume(musicRef.current, 0, STOP_FADE_MS);
+    }
+    if (sfxRef.current && !sfxRef.current.paused) {
+      fadeVolume(sfxRef.current, 0, STOP_FADE_MS);
+    }
+    if (narrationRef.current && !narrationRef.current.paused) {
+      fadeVolume(narrationRef.current, 0, STOP_FADE_MS);
+    }
+
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        cleanupAudioRefs();
+        resolve();
+      }, STOP_FADE_MS);
+    });
+  }
+
   // Create audio elements on mount
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -131,7 +311,7 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
     narrationRef.current.volume = 0;
 
     return () => {
-      stopAll();
+      cleanupAudioRefs();
       musicRef.current = null;
       sfxRef.current = null;
       narrationRef.current = null;
@@ -144,229 +324,369 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
     if (abortRef.current) {
       abortRef.current.abort();
     }
-    stopAll();
 
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setIsLoading(true);
-    setHasAudio(false);
+    // Fade out existing audio, then start new fetches
+    const startFetches = async () => {
+      await stopAll();
 
-    const currentMuted = isMuted;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setIsLoading(true);
+      setHasAudio(false);
 
-    // Fetch music
-    async function fetchMusic() {
-      try {
-        const res = await fetch('/api/music', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            city: params.city,
-            condition: params.condition,
-            temperature: params.temperature,
-            poem: params.poem,
-            soundDescription: params.soundDescription,
-          }),
-          signal: controller.signal,
-        });
+      // Auto-unmute — calling fetchAll means the user wants audio
+      isMutedRef.current = false;
+      setIsMuted(false);
+      const currentMuted = false;
 
-        if (controller.signal.aborted) return;
+      const useProgressive = canUseMediaSource();
 
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          console.error(`[ElevenLabs] Music API returned ${res.status}: ${errText}`);
-          return;
-        }
+      // Fetch music
+      async function fetchMusic() {
+        try {
+          const res = await fetch('/api/music', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              musicDirection: params.musicDirection,
+              poem: params.poem,
+            }),
+            signal: controller.signal,
+          });
 
-        // Verify we got audio, not an error JSON response
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const errData = await res.json().catch(() => ({}));
-          console.error('[ElevenLabs] Music API returned JSON instead of audio:', errData);
-          return;
-        }
+          if (controller.signal.aborted) return;
 
-        const blob = await res.blob();
-        if (controller.signal.aborted) return;
-
-        const url = URL.createObjectURL(blob);
-        blobUrlsRef.current.push(url);
-
-        if (musicRef.current && !controller.signal.aborted) {
-          musicRef.current.src = url;
-          musicRef.current.volume = 0;
-          try {
-            await musicRef.current.play();
-          } catch (playErr) {
-            console.error('[ElevenLabs] Music play() failed:', playErr);
+          if (!res.ok) {
+            const errText = await res.text().catch(() => '');
+            console.error(
+              `[ElevenLabs] Music API returned ${res.status}: ${errText}`,
+            );
+            return;
           }
-          if (!currentMuted) {
-            fadeVolume(musicRef.current, MUSIC_VOLUME, MUSIC_FADE_MS);
+
+          // Verify we got audio, not an error JSON response
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const errData = await res.json().catch(() => ({}));
+            console.error(
+              '[ElevenLabs] Music API returned JSON instead of audio:',
+              errData,
+            );
+            return;
           }
-          setHasAudio(true);
-        }
-      } catch (err: unknown) {
-        if ((err as Error)?.name !== 'AbortError') {
-          console.error('[ElevenLabs] Music fetch failed:', err);
-        }
-      }
-    }
 
-    // Fetch SFX
-    async function fetchSfx() {
-      try {
-        const res = await fetch('/api/sfx', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            city: params.city,
-            condition: params.condition,
-            temperature: params.temperature,
-            soundDescription: params.soundDescription,
-          }),
-          signal: controller.signal,
-        });
+          if (!musicRef.current || controller.signal.aborted) return;
 
-        if (controller.signal.aborted) return;
-
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          console.error(`[ElevenLabs] SFX API returned ${res.status}: ${errText}`);
-          return;
-        }
-
-        // Verify we got audio, not an error JSON response
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const errData = await res.json().catch(() => ({}));
-          console.error('[ElevenLabs] SFX API returned JSON instead of audio:', errData);
-          return;
-        }
-
-        const blob = await res.blob();
-        if (controller.signal.aborted) return;
-
-        const url = URL.createObjectURL(blob);
-        blobUrlsRef.current.push(url);
-
-        if (sfxRef.current && !controller.signal.aborted) {
-          sfxRef.current.src = url;
-          sfxRef.current.volume = 0;
-          try {
-            await sfxRef.current.play();
-          } catch (playErr) {
-            console.error('[ElevenLabs] SFX play() failed:', playErr);
-          }
-          if (!currentMuted) {
-            fadeVolume(sfxRef.current, SFX_VOLUME, SFX_FADE_MS);
-          }
-        }
-      } catch (err: unknown) {
-        if ((err as Error)?.name !== 'AbortError') {
-          console.error('[ElevenLabs] SFX fetch failed:', err);
-        }
-      }
-    }
-
-    // Fetch narration
-    async function fetchNarration() {
-      try {
-        const res = await fetch('/api/narrate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            poem: params.poem,
-            voice: params.voice,
-          }),
-          signal: controller.signal,
-        });
-
-        if (controller.signal.aborted) return;
-
-        if (!res.ok) {
-          const errText = await res.text().catch(() => '');
-          console.error(`[ElevenLabs] Narration API returned ${res.status}: ${errText}`);
-          return;
-        }
-
-        // Verify we got audio, not an error JSON response
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const errData = await res.json().catch(() => ({}));
-          console.error('[ElevenLabs] Narration API returned JSON instead of audio:', errData);
-          return;
-        }
-
-        const blob = await res.blob();
-        if (controller.signal.aborted) return;
-
-        if (blob.size === 0) {
-          console.warn('[ElevenLabs] Narration response was empty (0 bytes)');
-          return;
-        }
-
-        const url = URL.createObjectURL(blob);
-        blobUrlsRef.current.push(url);
-
-        if (narrationRef.current && !controller.signal.aborted) {
-          narrationRef.current.src = url;
-          narrationRef.current.volume = 0;
-
-          // Listen for load errors on the audio element
-          narrationRef.current.onerror = () => {
-            console.error('[ElevenLabs] Narration audio element error:', narrationRef.current?.error);
-          };
-
-          // Delay narration to let music establish
-          narrationTimerRef.current = setTimeout(async () => {
-            if (controller.signal.aborted || !narrationRef.current) return;
+          // Progressive playback: stream audio via MediaSource
+          if (useProgressive && res.body) {
             try {
-              await narrationRef.current.play();
-              if (!currentMuted) {
-                fadeVolume(narrationRef.current!, NARRATION_VOLUME, 1000);
-              }
-            } catch (playErr) {
-              console.warn(
-                '[ElevenLabs] Narration play() failed (may be autoplay policy):',
-                playErr,
+              musicRef.current.loop = true;
+              await playProgressively(
+                musicRef.current,
+                res,
+                controller.signal,
+                () => {
+                  // Playback started — fade in and signal hasAudio
+                  if (!currentMuted && musicRef.current) {
+                    fadeVolume(musicRef.current, MUSIC_VOLUME, MUSIC_FADE_MS);
+                  }
+                  setHasAudio(true);
+                },
+                blobUrlsRef.current,
               );
+              return;
+            } catch (err) {
+              // MediaSource failed — fall through to blob approach
+              console.warn(
+                '[ElevenLabs] Progressive playback failed, falling back to blob:',
+                err,
+              );
+              // Reset audio element for blob fallback
+              if (musicRef.current) {
+                musicRef.current.pause();
+                musicRef.current.src = '';
+              }
             }
-          }, NARRATION_DELAY_MS);
-        }
-      } catch (err: unknown) {
-        if ((err as Error)?.name !== 'AbortError') {
-          console.error('[ElevenLabs] Narration fetch failed:', err);
-        }
-      }
-    }
+          }
 
-    // Launch all 3 in parallel
-    Promise.allSettled([fetchMusic(), fetchSfx(), fetchNarration()]).then(() => {
-      if (!controller.signal.aborted) {
-        setIsLoading(false);
+          // Blob fallback (or primary path when MediaSource unavailable)
+          const blob = await res.blob();
+          if (controller.signal.aborted) return;
+
+          const url = URL.createObjectURL(blob);
+          blobUrlsRef.current.push(url);
+
+          if (musicRef.current && !controller.signal.aborted) {
+            musicRef.current.src = url;
+            musicRef.current.volume = 0;
+            try {
+              await musicRef.current.play();
+            } catch (playErr) {
+              console.error('[ElevenLabs] Music play() failed:', playErr);
+            }
+            if (!currentMuted) {
+              fadeVolume(musicRef.current, MUSIC_VOLUME, MUSIC_FADE_MS);
+            }
+            setHasAudio(true);
+          }
+        } catch (err: unknown) {
+          if ((err as Error)?.name !== 'AbortError') {
+            console.error('[ElevenLabs] Music fetch failed:', err);
+          }
+        }
       }
-    });
+
+      // Fetch SFX
+      async function fetchSfx() {
+        try {
+          const res = await fetch('/api/sfx', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ambienceDirection: params.ambienceDirection,
+            }),
+            signal: controller.signal,
+          });
+
+          if (controller.signal.aborted) return;
+
+          if (!res.ok) {
+            const errText = await res.text().catch(() => '');
+            console.error(
+              `[ElevenLabs] SFX API returned ${res.status}: ${errText}`,
+            );
+            return;
+          }
+
+          // Verify we got audio, not an error JSON response
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const errData = await res.json().catch(() => ({}));
+            console.error(
+              '[ElevenLabs] SFX API returned JSON instead of audio:',
+              errData,
+            );
+            return;
+          }
+
+          if (!sfxRef.current || controller.signal.aborted) return;
+
+          // Progressive playback: stream audio via MediaSource
+          if (useProgressive && res.body) {
+            try {
+              sfxRef.current.loop = true;
+              await playProgressively(
+                sfxRef.current,
+                res,
+                controller.signal,
+                () => {
+                  // Playback started — fade in
+                  if (!currentMuted && sfxRef.current) {
+                    fadeVolume(sfxRef.current, SFX_VOLUME, SFX_FADE_MS);
+                  }
+                },
+                blobUrlsRef.current,
+              );
+              return;
+            } catch (err) {
+              // MediaSource failed — fall through to blob approach
+              console.warn(
+                '[ElevenLabs] Progressive SFX playback failed, falling back to blob:',
+                err,
+              );
+              // Reset audio element for blob fallback
+              if (sfxRef.current) {
+                sfxRef.current.pause();
+                sfxRef.current.src = '';
+              }
+            }
+          }
+
+          // Blob fallback (or primary path when MediaSource unavailable)
+          const blob = await res.blob();
+          if (controller.signal.aborted) return;
+
+          const url = URL.createObjectURL(blob);
+          blobUrlsRef.current.push(url);
+
+          if (sfxRef.current && !controller.signal.aborted) {
+            sfxRef.current.src = url;
+            sfxRef.current.volume = 0;
+            try {
+              await sfxRef.current.play();
+            } catch (playErr) {
+              console.error('[ElevenLabs] SFX play() failed:', playErr);
+            }
+            if (!currentMuted) {
+              fadeVolume(sfxRef.current, SFX_VOLUME, SFX_FADE_MS);
+            }
+          }
+        } catch (err: unknown) {
+          if ((err as Error)?.name !== 'AbortError') {
+            console.error('[ElevenLabs] SFX fetch failed:', err);
+          }
+        }
+      }
+
+      // Fetch narration (always uses blob — short audio, often cached)
+      async function fetchNarration() {
+        try {
+          const res = await fetch('/api/narrate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              poem: params.poem,
+              voice: params.voice,
+            }),
+            signal: controller.signal,
+          });
+
+          if (controller.signal.aborted) return;
+
+          if (!res.ok) {
+            const errText = await res.text().catch(() => '');
+            console.error(
+              `[ElevenLabs] Narration API returned ${res.status}: ${errText}`,
+            );
+            return;
+          }
+
+          // Verify we got audio, not an error JSON response
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const errData = await res.json().catch(() => ({}));
+            console.error(
+              '[ElevenLabs] Narration API returned JSON instead of audio:',
+              errData,
+            );
+            return;
+          }
+
+          const blob = await res.blob();
+          if (controller.signal.aborted) return;
+
+          if (blob.size === 0) {
+            console.warn(
+              '[ElevenLabs] Narration response was empty (0 bytes)',
+            );
+            return;
+          }
+
+          const url = URL.createObjectURL(blob);
+          blobUrlsRef.current.push(url);
+
+          if (narrationRef.current && !controller.signal.aborted) {
+            narrationRef.current.src = url;
+            narrationRef.current.volume = 0;
+
+            // Listen for load errors on the audio element
+            narrationRef.current.onerror = () => {
+              console.error(
+                '[ElevenLabs] Narration audio element error:',
+                narrationRef.current?.error,
+              );
+            };
+
+            // Restore music volume when narration finishes
+            narrationRef.current.onended = () => {
+              if (musicRef.current && !isMutedRef.current) {
+                fadeVolume(musicRef.current, MUSIC_VOLUME, 2000);
+              }
+            };
+
+            // Delay narration to let music establish
+            narrationTimerRef.current = setTimeout(async () => {
+              if (controller.signal.aborted || !narrationRef.current) return;
+              try {
+                await narrationRef.current.play();
+                if (!currentMuted) {
+                  // Duck music under the voice
+                  if (musicRef.current) {
+                    fadeVolume(musicRef.current, MUSIC_DUCKED_VOLUME, 1500);
+                  }
+                  fadeVolume(narrationRef.current!, NARRATION_VOLUME, 1000);
+                }
+              } catch (playErr) {
+                console.warn(
+                  '[ElevenLabs] Narration play() failed (may be autoplay policy):',
+                  playErr,
+                );
+              }
+            }, NARRATION_DELAY_MS);
+          }
+        } catch (err: unknown) {
+          if ((err as Error)?.name !== 'AbortError') {
+            console.error('[ElevenLabs] Narration fetch failed:', err);
+          }
+        }
+      }
+
+      // Launch all 3 in parallel
+      Promise.allSettled([fetchMusic(), fetchSfx(), fetchNarration()]).then(
+        () => {
+          if (!controller.signal.aborted) {
+            setIsLoading(false);
+          }
+        },
+      );
+    }; // end startFetches
+
+    startFetches();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMuted]);
+  }, []);
 
   const mute = useCallback(() => {
     setIsMuted(true);
+    isMutedRef.current = true;
     if (musicRef.current) fadeVolume(musicRef.current, 0, 500);
     if (sfxRef.current) fadeVolume(sfxRef.current, 0, 500);
     if (narrationRef.current) fadeVolume(narrationRef.current, 0, 500);
   }, []);
 
   const unmute = useCallback(() => {
+    // No-op if already unmuted — prevents replaying old narration on city switch
+    if (!isMutedRef.current) return;
+
     setIsMuted(false);
+    isMutedRef.current = false;
+
+    const narrationPlaying =
+      narrationRef.current?.src &&
+      !narrationRef.current.ended &&
+      !narrationRef.current.paused;
+    const narrationWillReplay =
+      narrationRef.current?.src && narrationRef.current.ended;
+
+    // Music volume depends on whether narration is active
+    const musicTarget =
+      narrationPlaying || narrationWillReplay
+        ? MUSIC_DUCKED_VOLUME
+        : MUSIC_VOLUME;
+
     if (musicRef.current && musicRef.current.src) {
-      musicRef.current.play().catch((e) => console.error('[ElevenLabs] Music resume failed:', e));
-      fadeVolume(musicRef.current, MUSIC_VOLUME, 1000);
+      musicRef.current
+        .play()
+        .catch((e) =>
+          console.error('[ElevenLabs] Music resume failed:', e),
+        );
+      fadeVolume(musicRef.current, musicTarget, 1000);
     }
     if (sfxRef.current && sfxRef.current.src) {
-      sfxRef.current.play().catch((e) => console.error('[ElevenLabs] SFX resume failed:', e));
+      sfxRef.current
+        .play()
+        .catch((e) => console.error('[ElevenLabs] SFX resume failed:', e));
       fadeVolume(sfxRef.current, SFX_VOLUME, 1000);
     }
-    if (narrationRef.current && narrationRef.current.src && !narrationRef.current.ended) {
-      narrationRef.current.play().catch((e) => console.warn('[ElevenLabs] Narration resume failed:', e));
+    if (narrationRef.current && narrationRef.current.src) {
+      // If narration already finished playing silently, replay from start
+      if (narrationRef.current.ended) {
+        narrationRef.current.currentTime = 0;
+      }
+      narrationRef.current
+        .play()
+        .catch((e) =>
+          console.warn('[ElevenLabs] Narration resume failed:', e),
+        );
       fadeVolume(narrationRef.current, NARRATION_VOLUME, 500);
     }
   }, []);

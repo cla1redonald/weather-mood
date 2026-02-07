@@ -25,6 +25,11 @@ body {
   .text-shadow-lg {
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   }
+
+  @keyframes pulse-overlay {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+  }
 }
 
 /* Ensure focus states are visible for accessibility */
