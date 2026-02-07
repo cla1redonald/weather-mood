@@ -218,7 +218,7 @@ function HomeContent() {
 
       {/* Layer 5: UI Controls (z-20+) */}
       <WeatherInfo weather={weatherData} isLoading={isLoadingWeather} countryCode={countryCode} />
-      <CitySearch onCitySelect={handleCitySelect} defaultCity={defaultCity} />
+      <CitySearch onCitySelect={handleCitySelect} onRandomCity={handleCitySelect} defaultCity={defaultCity} />
       <MuteToggle isMuted={isMuted} onToggle={handleToggleMute} />
     </main>
   );

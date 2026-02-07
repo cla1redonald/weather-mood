@@ -3,13 +3,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { searchCities } from '@/lib/weather/geocoding';
 import type { GeoLocation } from '@/types/weather';
+import RandomCityButton from '@/components/RandomCityButton';
 
 interface CitySearchProps {
   onCitySelect: (city: GeoLocation) => void;
+  onRandomCity?: (city: GeoLocation) => void;
   defaultCity?: string;
 }
 
-export default function CitySearch({ onCitySelect, defaultCity }: CitySearchProps) {
+export default function CitySearch({ onCitySelect, onRandomCity, defaultCity }: CitySearchProps) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<GeoLocation[]>([]);
   const [selectedCity, setSelectedCity] = useState<GeoLocation | null>(null);
@@ -240,6 +242,12 @@ export default function CitySearch({ onCitySelect, defaultCity }: CitySearchProp
       {!selectedCity && query && !isLoading && suggestions.length === 0 && !error && (
         <div className="mt-2 text-center text-white/40 text-xs">
           Type to search...
+        </div>
+      )}
+
+      {onRandomCity && (
+        <div className="mt-3 flex justify-center">
+          <RandomCityButton onSelect={onRandomCity} />
         </div>
       )}
     </div>
