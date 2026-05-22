@@ -574,7 +574,8 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              poem: params.poemLocal || params.poem,
+              poem: params.poem,           // English fallback for unsupported languages
+              poemLocal: params.poemLocal, // Local-language version (used when supported)
               voice: params.voice,
               languageCode: params.languageCode,
             }),

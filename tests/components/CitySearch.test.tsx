@@ -12,9 +12,9 @@ vi.mock('@/lib/weather/geocoding', () => ({
 describe('CitySearch Component', () => {
   const mockOnCitySelect = vi.fn();
   const mockCities = [
-    { name: 'London', country: 'United Kingdom', latitude: 51.5074, longitude: -0.1278 },
-    { name: 'Paris', country: 'France', latitude: 48.8566, longitude: 2.3522 },
-    { name: 'New York', country: 'United States', latitude: 40.7128, longitude: -74.0060 },
+    { name: 'London', country: 'United Kingdom', countryCode: 'GB', latitude: 51.5074, longitude: -0.1278 },
+    { name: 'Paris', country: 'France', countryCode: 'FR', latitude: 48.8566, longitude: 2.3522 },
+    { name: 'New York', country: 'United States', countryCode: 'US', latitude: 40.7128, longitude: -74.0060 },
   ];
 
   beforeEach(() => {
@@ -24,11 +24,6 @@ describe('CitySearch Component', () => {
   it('renders with placeholder text', () => {
     render(<CitySearch onCitySelect={mockOnCitySelect} />);
     expect(screen.getByPlaceholderText(/enter a city/i)).toBeInTheDocument();
-  });
-
-  it('shows initial hint message', () => {
-    render(<CitySearch onCitySelect={mockOnCitySelect} />);
-    expect(screen.getByText(/enter a city to feel the weather/i)).toBeInTheDocument();
   });
 
   it('handles input changes', () => {

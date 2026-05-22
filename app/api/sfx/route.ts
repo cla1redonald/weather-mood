@@ -19,12 +19,16 @@ function validateInput(body: unknown): SfxInput | null {
   };
 }
 
+// ElevenLabs sound-generation endpoint rejects text >450 chars.
+const ELEVENLABS_SFX_MAX_LEN = 450;
+const SFX_SUFFIX = 'Cinematic, atmospheric, loopable field recording — layered and alive.';
+
 function buildSfxPrompt(input: SfxInput): string {
-  return [
-    input.ambienceDirection,
-    'Create an immersive, loopable field recording. Cinematic and deeply atmospheric.',
-    'This should sound like a real place — layered, spatial, and alive with detail.',
-  ].join(' ');
+  const headroom = ELEVENLABS_SFX_MAX_LEN - SFX_SUFFIX.length - 1; // -1 for the joining space
+  const direction = input.ambienceDirection.length > headroom
+    ? input.ambienceDirection.slice(0, headroom).replace(/[\s,.\-—]+\S*$/, '').trim()
+    : input.ambienceDirection;
+  return `${direction} ${SFX_SUFFIX}`;
 }
 
 export async function POST(request: NextRequest) {

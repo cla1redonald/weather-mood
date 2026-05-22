@@ -53,20 +53,31 @@ const VOICE_PERFORMANCE_SETTINGS: Record<string, {
 
 const DEFAULT_PERFORMANCE_SETTINGS = { stability: 0.40, similarity_boost: 0.75, style: 0.70, speed: 0.82 };
 
+// Languages supported by ElevenLabs `eleven_multilingual_v2`.
+// Out-of-list languages (e.g. Afrikaans 'af') cause a 4xx upstream; we skip narration for them.
+const SUPPORTED_LANGUAGES = new Set([
+  'en', 'ja', 'zh', 'de', 'hi', 'fr', 'ko', 'pt', 'it', 'es',
+  'id', 'nl', 'tr', 'fil', 'tl', 'pl', 'sv', 'bg', 'ro', 'ar',
+  'cs', 'el', 'fi', 'hr', 'ms', 'sk', 'da', 'ta', 'uk', 'ru',
+  'hu', 'no', 'vi',
+]);
+
 interface NarrateInput {
-  poem: string;
+  poem: string;            // English fallback (read aloud when languageCode is unsupported)
+  poemLocal?: string;      // Translation in the local language
   voice?: string;
   languageCode?: string;
 }
 
 function validateInput(body: unknown): NarrateInput | null {
   if (typeof body !== 'object' || body === null) return null;
-  const { poem, voice, languageCode } = body as Record<string, unknown>;
+  const { poem, poemLocal, voice, languageCode } = body as Record<string, unknown>;
 
   if (typeof poem !== 'string' || !poem.trim()) return null;
 
   return {
     poem: poem.trim(),
+    poemLocal: typeof poemLocal === 'string' && poemLocal.trim() ? poemLocal.trim() : undefined,
     voice: typeof voice === 'string' ? voice : undefined,
     languageCode: typeof languageCode === 'string' && /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(languageCode) ? languageCode : undefined,
   };
@@ -117,6 +128,15 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  // Strip region subtags (e.g. 'pt-BR' → 'pt') — ElevenLabs rejects them.
+  const base = input.languageCode?.split('-')[0];
+  const localSupported = !!base && SUPPORTED_LANGUAGES.has(base);
+
+  // Pick what to narrate: local-language poem when the language is supported,
+  // English fallback otherwise (so unknown languages still get spoken cleanly).
+  const text = localSupported && input.poemLocal ? input.poemLocal : input.poem;
+  const languageBody = localSupported && base !== 'en' ? { language_code: base } : {};
+
   try {
     // Get per-voice performance tuning (or default if voice persona not found)
     const perfSettings = (input.voice && VOICE_PERFORMANCE_SETTINGS[input.voice])
@@ -124,16 +144,9 @@ export async function POST(request: NextRequest) {
       : DEFAULT_PERFORMANCE_SETTINGS;
 
     const response = await elevenlabsFetch(`/text-to-speech/${voiceId}`, {
-      text: input.poem,
+      text,
       model_id: 'eleven_multilingual_v2',
-      // Only send language_code for non-English locales.
-      // Strip region subtags (e.g. 'pt-BR' → 'pt') — ElevenLabs rejects them.
-      ...(() => {
-        if (!input.languageCode) return {};
-        const base = input.languageCode.split('-')[0];
-        if (base === 'en') return {}; // English is the default, omitting lets model use natural voice
-        return { language_code: base };
-      })(),
+      ...languageBody,
       voice_settings: {
         stability: perfSettings.stability,
         similarity_boost: perfSettings.similarity_boost,

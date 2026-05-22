@@ -66,6 +66,9 @@ describe('Weather Edge Cases', () => {
       weatherCode: 2,
       uvIndex: 3,
       condition: 'clear',
+      sunrise: '2026-05-22T05:00',
+      sunset: '2026-05-22T21:00',
+      utcOffsetSeconds: 0,
       ...overrides,
     });
 
