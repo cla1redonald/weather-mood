@@ -219,7 +219,7 @@ MVP delivers one seamless experience: enter a city, see/hear/read the weather. N
 **Purpose:** Build the server-side poem generation endpoint and client-side poem display with caching.
 
 **Actions:**
-- [ ] Create Vercel Edge Function API route (`app/api/poem/route.ts`)
+- [ ] Create Vercel Edge Function API route (`app/api/mood/route.ts`)
 - [ ] Implement Claude API integration using `@anthropic-ai/sdk`
   - Prompt: Given city name, temperature, weather condition, wind, and humidity, generate a 4-6 line evocative poem
   - Prompt tuning: poem should feel connected to the *specific* conditions, not generic weather poetry
@@ -559,8 +559,8 @@ src/
     page.tsx                  # Main page composition
     layout.tsx                # Root layout
     api/
-      poem/
-        route.ts              # Edge Function for poem generation
+      mood/
+        route.ts              # Edge Function for mood profile generation (poem + visual + voice + musicDirection + ambienceDirection)
   lib/
     weather/
       api.ts                  # Open-Meteo weather client
@@ -696,6 +696,7 @@ MVP is complete when:
 ## Creative Vision v2: Every Visit Is a Teleportation
 
 > **Updated:** 2026-02-07
+> **Status:** SHIPPED (commit 4197c4d and prior — multilingual narration, ambienceDirection truncation, and all v2 features are live)
 
 ### The Shift
 

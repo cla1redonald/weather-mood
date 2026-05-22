@@ -1,6 +1,6 @@
 # Weather Mood
 
-A full-screen generative art experience that transforms real-time weather data into immersive visual, audio, and poetic moments. Enter any city and watch particles dance with the wind, colors shift with temperature, ambient tones pulse with humidity, and an AI-generated poem capture the mood.
+A full-screen generative art experience that transforms real-time weather data into immersive visual, audio, and poetic moments. Enter any city and watch particles dance with the wind, colors shift with temperature, ambient tones pulse with humidity, an AI-generated poem capture the mood — then hear it narrated aloud in the local language over generative music and ambient sound.
 
 ![Weather Mood Screenshot](Screenshot showing a full-screen canvas with flowing particles in shades of blue and grey for rainy London, with a poem overlay at the bottom reading: "Grey skies weep gently / Thames reflects silver sorrow / London's quiet tears")
 
@@ -28,9 +28,16 @@ Weather Mood creates a unique, layered experience for every city and weather con
 - **Mute/unmute control** with visual hint (M key or on-screen button)
 
 ### 3. Poetry Layer (Claude API)
-- **AI-generated poems** tailored to specific city + weather conditions
-- **Caching**: Same city + condition returns the same poem for 1 hour
+- **AI-generated poems** tailored to specific city + weather conditions, always in English
+- **Local-language translation** (`poemLocal`) generated alongside the English poem for narration
+- **No caching** — every visit produces a fresh poem, music direction, and ambience direction
 - **Graceful degradation**: App works fully even if Claude API is unavailable
+
+### 4. ElevenLabs Audio Layer
+- **Narration** (`/api/narrate`): poem read aloud using `eleven_multilingual_v2`. For the 33 supported locales the local-language `poemLocal` is narrated; all other languages fall back to the English `poem`. Each voice persona has per-voice tuning (stability, style, speed).
+- **Generative music** (`/api/music`): ~30 seconds of instrumental music generated from Claude's `musicDirection` prompt, matched to the city and weather. Requires a paid ElevenLabs plan (Starter or higher).
+- **Ambient SFX** (`/api/sfx`): field-recording-style soundscape generated from Claude's `ambienceDirection` prompt. The prompt is truncated to fit ElevenLabs' 450-character limit before dispatch.
+- **Narration is cached** by poem hash + voice + language (1-hour in-memory TTL). Music and SFX are not cached — they are regenerated each visit.
 
 ## Tech Stack
 
@@ -39,7 +46,8 @@ Weather Mood creates a unique, layered experience for every city and weather con
 - **Styling**: Tailwind CSS
 - **Rendering**: Canvas 2D API + simplex-noise (~2KB)
 - **Audio**: Web Audio API (no libraries)
-- **AI**: Claude API via `@anthropic-ai/sdk`
+- **AI — Poem + Visual Profile**: Claude API via `@anthropic-ai/sdk` (model: `claude-haiku-4-5-20251001`)
+- **AI — Narration, Music, SFX**: ElevenLabs REST API via `lib/elevenlabs/client.ts` (direct `fetch`, no SDK)
 - **APIs**: Open-Meteo (weather & geocoding, no key required)
 - **Testing**: Vitest + React Testing Library
 - **Deployment**: Vercel
@@ -51,6 +59,7 @@ Weather Mood creates a unique, layered experience for every city and weather con
 - Node.js 18+
 - npm
 - (Optional) Anthropic API key for poem generation
+- (Optional) ElevenLabs API key for narration, music, and SFX
 
 ### Installation
 
@@ -70,9 +79,10 @@ Weather Mood creates a unique, layered experience for every city and weather con
    cp .env.example .env
    ```
 
-   Add your Anthropic API key to `.env`:
+   Add your API keys to `.env`:
    ```
-   ANTHROPIC_API_KEY=your_api_key_here
+   ANTHROPIC_API_KEY=your_anthropic_key_here
+   ELEVENLABS_API_KEY=your_elevenlabs_key_here
    ```
 
 4. Run the development server:
@@ -96,12 +106,18 @@ Weather Mood creates a unique, layered experience for every city and weather con
 Create a `.env` file in the project root with:
 
 ```bash
-# Anthropic API key for poem generation (optional)
+# Anthropic API key for poem + visual profile generation (optional)
 # Get your key from: https://console.anthropic.com/
-ANTHROPIC_API_KEY=your_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_key_here
+
+# ElevenLabs API key for narration, music, and SFX (optional)
+# Get your key from: https://elevenlabs.io/
+# Note: music generation and library voices require a paid plan (Starter or higher).
+# SFX and narration work on the free tier.
+ELEVENLABS_API_KEY=your_elevenlabs_key_here
 ```
 
-**Note**: The app works fully without an API key. If `ANTHROPIC_API_KEY` is not set, poems will not generate, but the visual and audio layers will still function.
+**Note**: The app works without either key. Without `ANTHROPIC_API_KEY` poems will not generate; without `ELEVENLABS_API_KEY` narration, music, and SFX will not play. The visual and Web Audio layers always function.
 
 ## How It Works
 
@@ -113,7 +129,7 @@ Weather Mood uses a unidirectional data flow:
 2. **Weather Fetch** (Open-Meteo Weather API) → Raw weather data
 3. **Classification** (WMO codes) → Weather condition (rain, snow, clear, etc.)
 4. **Normalization** → All values mapped to 0-1 range
-5. **Distribution** → Normalized params drive visual, audio, and poem engines
+5. **Distribution** → Normalized params drive visual, Web Audio, and AI engines
 
 ```
 ┌─────────────┐
@@ -132,14 +148,25 @@ Weather Mood uses a unidirectional data flow:
 └──────┬──────┘      └────────────┘
        │
        ├────────────►┌────────────┐
-       │             │ Audio      │
+       │             │ Web Audio  │
        │             │ Engine     │
        │             └────────────┘
        │
-       └────────────►┌────────────┐
-                     │ Poem       │
-                     │ Generation │
-                     └────────────┘
+       └────────────►┌──────────────────┐
+                     │ /api/mood        │
+                     │ (Claude Haiku)   │
+                     │ poem + visual    │
+                     │ profile + voice  │
+                     │ + musicDirection │
+                     │ + ambienceDir.   │
+                     └────────┬─────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              v               v               v
+       ┌────────────┐  ┌────────────┐  ┌────────────┐
+       │/api/narrate│  │/api/music  │  │  /api/sfx  │
+       │(ElevenLabs)│  │(ElevenLabs)│  │(ElevenLabs)│
+       └────────────┘  └────────────┘  └────────────┘
 ```
 
 ### Weather Classification
@@ -166,12 +193,7 @@ All weather parameters are normalized to a 0-1 range:
 
 ## Testing
 
-The project has 235 tests covering:
-
-- **Unit tests** (160 tests): Weather classification, normalization, audio/visual parameter mapping, palette interpolation, particle systems, poem generation
-- **Component tests** (63 tests): CitySearch, WeatherInfo, MuteToggle, PoemOverlay
-- **Integration tests** (6 tests): Full weather data pipeline (search → fetch → classify → normalize)
-- **Edge case tests** (25 tests): Extreme values, null/undefined handling, boundary conditions
+The project has 193 tests across 13 files.
 
 Run tests:
 ```bash
@@ -186,6 +208,7 @@ npm test
 2. Import the project in [Vercel](https://vercel.com)
 3. Add environment variables in Vercel project settings:
    - `ANTHROPIC_API_KEY` (optional)
+   - `ELEVENLABS_API_KEY` (optional — music requires a paid ElevenLabs plan)
 4. Deploy
 
 The app will be live at `https://your-project.vercel.app`
@@ -200,7 +223,8 @@ npm run start
 ## Credits
 
 - **Weather Data**: [Open-Meteo](https://open-meteo.com) (free weather API)
-- **Poem Generation**: [Claude API](https://www.anthropic.com/api) by Anthropic
+- **Poem + Visual Profile**: [Claude API](https://www.anthropic.com/api) by Anthropic
+- **Narration, Music, SFX**: [ElevenLabs](https://elevenlabs.io)
 - **Noise Generation**: [simplex-noise](https://github.com/jwagner/simplex-noise.js)
 
 ## License

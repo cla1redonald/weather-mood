@@ -9,7 +9,10 @@
 | Route | Purpose | Auth |
 |-------|---------|------|
 | `/` | Main (and only) page -- full-screen generative experience | None |
-| `/api/poem` | Edge Function -- generates AI poem from weather data | Server-side API key |
+| `/api/mood` | Claude Haiku — generates poem, visual profile, voice persona, `musicDirection`, and `ambienceDirection` from weather data | Server-side API key (`ANTHROPIC_API_KEY`) |
+| `/api/narrate` | ElevenLabs TTS — narrates poem using `eleven_multilingual_v2`; speaks `poemLocal` for supported locales, falls back to English `poem` | Server-side API key (`ELEVENLABS_API_KEY`) |
+| `/api/music` | ElevenLabs music generation — ~30s instrumental piece from Claude's `musicDirection` prompt | Server-side API key (`ELEVENLABS_API_KEY`) |
+| `/api/sfx` | ElevenLabs sound generation — ambient field-recording soundscape from Claude's `ambienceDirection` prompt (truncated to 450 chars) | Server-side API key (`ELEVENLABS_API_KEY`) |
 
 **Query Parameters:**
 | Param | Example | Purpose |
@@ -421,6 +424,52 @@ User opens weathermood.vercel.app?city=Tokyo
 │ - Experience still feels │
 │   complete               │
 └─────────────────────────┘
+```
+
+### Flow 6: Narration Language Selection
+
+When `/api/mood` returns a `languageCode`, the client sends both `poem` (English) and `poemLocal` (translated) to `/api/narrate`.
+
+```
+/api/narrate receives poem + poemLocal + languageCode
+         │
+         ├── languageCode supported by eleven_multilingual_v2
+         │   (e.g. 'fr', 'ja', 'pt', 'de' — 33 locales total)
+         │         │
+         │         ▼
+         │   Narrate poemLocal in local language
+         │   (region subtags stripped: 'pt-BR' → 'pt')
+         │
+         └── languageCode unsupported or absent
+                   │
+                   ▼
+             Narrate English poem
+             (no language_code sent to ElevenLabs)
+```
+
+Narration audio is cached by poem hash + voice ID + language code (1-hour in-memory TTL) so identical requests on the same server instance skip re-generation.
+
+### Flow 7: SFX Prompt Truncation
+
+Claude's `ambienceDirection` is capped at 250 characters by the prompt instruction, but `/api/sfx` applies a second safety net before dispatching to ElevenLabs (which rejects text over 450 characters):
+
+```
+ambienceDirection string arrives at /api/sfx
+         │
+         ▼
+headroom = 450 - len(SFX_SUFFIX) - 1
+         │
+         ├── ambienceDirection.length ≤ headroom
+         │         │
+         │         ▼
+         │   Use as-is + append SFX_SUFFIX
+         │
+         └── ambienceDirection.length > headroom
+                   │
+                   ▼
+             Slice to headroom, trim trailing
+             partial word, append SFX_SUFFIX
+             (total prompt ≤ 450 chars)
 ```
 
 ---
