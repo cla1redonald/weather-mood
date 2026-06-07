@@ -10,6 +10,12 @@ import {
 } from '@/types/mood';
 import type { VisualProfile } from '@/types/mood';
 import { validateFont } from '@/lib/fonts';
+import {
+  guardGenerationRequest,
+  InvalidJsonError,
+  parseJsonBody,
+  RequestBodyTooLargeError,
+} from '@/lib/api-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -18,6 +24,13 @@ const VALID_VOICE_PERSONAS = [
   'serene_female', 'warm_male', 'deep_male', 'gentle_female',
   'contemplative_male', 'ethereal_female', 'storyteller_male', 'bright_female',
 ] as const;
+
+const MOOD_LIMIT = {
+  bucket: 'mood',
+  maxRequests: 8,
+  windowSeconds: 60,
+  maxBodyBytes: 8 * 1024,
+};
 
 function validateVoicePersona(voice: unknown): string {
   if (typeof voice === 'string' && VALID_VOICE_PERSONAS.includes(voice as typeof VALID_VOICE_PERSONAS[number])) {
@@ -221,6 +234,9 @@ function buildFallbackProfile(condition: string): {
 }
 
 export async function POST(request: NextRequest) {
+  const guarded = await guardGenerationRequest(request, MOOD_LIMIT);
+  if (guarded) return guarded;
+
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -231,8 +247,12 @@ export async function POST(request: NextRequest) {
 
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await parseJsonBody(request, MOOD_LIMIT.maxBodyBytes);
+  } catch (err) {
+    if (err instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
+    }
+    if (!(err instanceof InvalidJsonError)) console.error('Mood request parse error:', err);
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { elevenlabsFetch } from '@/lib/elevenlabs/client';
+import {
+  guardGenerationRequest,
+  InvalidJsonError,
+  parseJsonBody,
+  RequestBodyTooLargeError,
+} from '@/lib/api-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -8,6 +14,13 @@ interface MusicInput {
   musicDirection: string;
   poem: string;
 }
+
+const MUSIC_LIMIT = {
+  bucket: 'music',
+  maxRequests: 4,
+  windowSeconds: 60,
+  maxBodyBytes: 8 * 1024,
+};
 
 function validateInput(body: unknown): MusicInput | null {
   if (typeof body !== 'object' || body === null) return null;
@@ -33,6 +46,9 @@ function buildMusicPrompt(input: MusicInput): string {
 }
 
 export async function POST(request: NextRequest) {
+  const guarded = await guardGenerationRequest(request, MUSIC_LIMIT);
+  if (guarded) return guarded;
+
   if (!process.env.ELEVENLABS_API_KEY) {
     return NextResponse.json(
       { error: 'Music generation unavailable' },
@@ -42,8 +58,12 @@ export async function POST(request: NextRequest) {
 
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await parseJsonBody(request, MUSIC_LIMIT.maxBodyBytes);
+  } catch (err) {
+    if (err instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
+    }
+    if (!(err instanceof InvalidJsonError)) console.error('Music request parse error:', err);
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 

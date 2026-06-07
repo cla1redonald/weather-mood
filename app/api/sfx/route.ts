@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { elevenlabsFetch } from '@/lib/elevenlabs/client';
+import {
+  guardGenerationRequest,
+  InvalidJsonError,
+  parseJsonBody,
+  RequestBodyTooLargeError,
+} from '@/lib/api-guard';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -7,6 +13,13 @@ export const dynamic = 'force-dynamic';
 interface SfxInput {
   ambienceDirection: string;
 }
+
+const SFX_LIMIT = {
+  bucket: 'sfx',
+  maxRequests: 12,
+  windowSeconds: 60,
+  maxBodyBytes: 2 * 1024,
+};
 
 function validateInput(body: unknown): SfxInput | null {
   if (typeof body !== 'object' || body === null) return null;
@@ -32,6 +45,9 @@ function buildSfxPrompt(input: SfxInput): string {
 }
 
 export async function POST(request: NextRequest) {
+  const guarded = await guardGenerationRequest(request, SFX_LIMIT);
+  if (guarded) return guarded;
+
   if (!process.env.ELEVENLABS_API_KEY) {
     return NextResponse.json(
       { error: 'Sound effects generation unavailable' },
@@ -41,8 +57,12 @@ export async function POST(request: NextRequest) {
 
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await parseJsonBody(request, SFX_LIMIT.maxBodyBytes);
+  } catch (err) {
+    if (err instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
+    }
+    if (!(err instanceof InvalidJsonError)) console.error('SFX request parse error:', err);
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
