@@ -119,6 +119,19 @@ ELEVENLABS_API_KEY=your_elevenlabs_key_here
 
 **Note**: The app works without either key. Without `ANTHROPIC_API_KEY` poems will not generate; without `ELEVENLABS_API_KEY` narration, music, and SFX will not play. The visual and Web Audio layers always function.
 
+See `.env.example` for the full list, including the cost controls below.
+
+## Cost Controls
+
+Every visit makes one Claude call and three ElevenLabs calls, and ElevenLabs is most of the cost. Four controls keep a public deployment bounded:
+
+- **Visit tokens.** `/api/mood` returns a short-lived signed token. The music, sfx and narrate routes refuse any request without one (401), and each token is good for exactly one call per route (a replay gets 409). So the audio routes cannot be used as open proxies: an ElevenLabs call always costs the caller a mood generation first. Set `VISIT_TOKEN_SECRET` in production; without it the audio routes return 503 rather than run unprotected.
+- **Per-visitor limits.** `/api/mood` allows 4 generations per 10 minutes and 12 per day per IP.
+- **Daily spend cap.** Each paid route reserves an estimated cost (cents, rounded up) against a daily total. Past `WEATHER_MOOD_DAILY_CAP_CENTS` (default 1000, so $10) paid routes return 503 and the page falls back to parametric visuals and silence.
+- **Shared state.** With `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` set, the limits, grants and cap are shared across serverless instances. Without them each instance keeps its own counters, which is a much weaker bound, and the logs say so.
+
+Set a hard spend limit at the provider as well (Anthropic console, ElevenLabs plan). These controls bound a bad day; they are not a substitute for a provider-side cap.
+
 ## How It Works
 
 ### Architecture Overview

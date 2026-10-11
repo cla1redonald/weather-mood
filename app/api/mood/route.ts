@@ -16,6 +16,8 @@ import {
   parseJsonBody,
   RequestBodyTooLargeError,
 } from '@/lib/api-guard';
+import { reserveSpend } from '@/lib/spend-cap';
+import { issueVisitToken } from '@/lib/visit-token';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,10 +27,19 @@ const VALID_VOICE_PERSONAS = [
   'contemplative_male', 'ethereal_female', 'storyteller_male', 'bright_female',
 ] as const;
 
+// Each mood generation buys one music, one sfx and one narration call, so this
+// is the limit that bounds spend per visitor. A burst limit and a daily limit.
 const MOOD_LIMIT = {
   bucket: 'mood',
-  maxRequests: 8,
-  windowSeconds: 60,
+  maxRequests: 4,
+  windowSeconds: 10 * 60,
+  maxBodyBytes: 8 * 1024,
+};
+
+const MOOD_DAILY_LIMIT = {
+  bucket: 'mood-day',
+  maxRequests: 12,
+  windowSeconds: 24 * 60 * 60,
   maxBodyBytes: 8 * 1024,
 };
 
@@ -236,6 +247,18 @@ function buildFallbackProfile(condition: string): {
 export async function POST(request: NextRequest) {
   const guarded = await guardGenerationRequest(request, MOOD_LIMIT);
   if (guarded) return guarded;
+  const guardedDaily = await guardGenerationRequest(request, MOOD_DAILY_LIMIT);
+  if (guardedDaily) return guardedDaily;
+
+  const spend = await reserveSpend('mood');
+  if (!spend.allowed) {
+    console.warn(`[spend-cap] Daily cap reached: ${spend.spentCents}c of ${spend.capCents}c (shared=${spend.shared})`);
+    return NextResponse.json({ error: 'Daily generation budget reached. Try again tomorrow.' }, { status: 503 });
+  }
+
+  // The token lets the client make exactly one music, one sfx and one
+  // narration call for this generation. See lib/visit-token.ts.
+  const visitToken = issueVisitToken();
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -299,6 +322,7 @@ export async function POST(request: NextRequest) {
         musicDirection: fallback.musicDirection,
         ambienceDirection: fallback.ambienceDirection,
         cached: false,
+        visitToken,
         _source: 'fallback:empty_response',
       });
     }
@@ -323,6 +347,7 @@ export async function POST(request: NextRequest) {
         musicDirection: fallback.musicDirection,
         ambienceDirection: fallback.ambienceDirection,
         cached: false,
+        visitToken,
         _source: 'fallback:json_parse_error',
       });
     }
@@ -352,7 +377,7 @@ export async function POST(request: NextRequest) {
       ? parsed.ambienceDirection.trim()
       : fallback.ambienceDirection;
 
-    return NextResponse.json({ poem, poemLocal, visual, voice, fontFamily, languageCode, musicDirection, ambienceDirection, cached: false, _source: 'ai' });
+    return NextResponse.json({ poem, poemLocal, visual, voice, fontFamily, languageCode, musicDirection, ambienceDirection, cached: false, visitToken, _source: 'ai' });
   } catch (err) {
     console.error('Mood generation error:', err);
     return NextResponse.json(

@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { upstashConfigured, upstashPipeline } from '@/lib/upstash';
+import { reserveSpend, type SpendRoute } from '@/lib/spend-cap';
+import { VISIT_TOKEN_HEADER, VISIT_TOKEN_TTL_SECONDS, verifyVisitToken } from '@/lib/visit-token';
 
 type LimitConfig = {
   bucket: string;
@@ -13,9 +16,7 @@ type Counter = {
 };
 
 const memoryCounters = new Map<string, Counter>();
-
-const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+const memoryGrants = new Map<string, number>();
 
 export class RequestBodyTooLargeError extends Error {
   constructor() {
@@ -61,26 +62,12 @@ function rateLimitResponse(resetAt: number): NextResponse {
 }
 
 async function checkUpstashLimit(key: string, config: LimitConfig): Promise<NextResponse | null> {
-  if (!redisUrl || !redisToken) return null;
+  const results = await upstashPipeline([
+    ['INCR', key],
+    ['EXPIRE', key, config.windowSeconds],
+  ]);
+  if (!results) return null;
 
-  const response = await fetch(`${redisUrl.replace(/\/$/, '')}/pipeline`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${redisToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify([
-      ['INCR', key],
-      ['EXPIRE', key, config.windowSeconds],
-    ]),
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Upstash rate limit failed: ${response.status}`);
-  }
-
-  const results = (await response.json()) as Array<{ result?: unknown }>;
   const count = Number(results[0]?.result ?? 1);
   if (count > config.maxRequests) {
     return rateLimitResponse(Date.now() + config.windowSeconds * 1000);
@@ -116,12 +103,76 @@ export async function guardGenerationRequest(
   try {
     const upstashLimit = await checkUpstashLimit(key, config);
     if (upstashLimit) return upstashLimit;
-    if (redisUrl && redisToken) return null;
+    if (upstashConfigured()) return null;
   } catch (err) {
     console.error('[rate-limit] Upstash unavailable, using memory fallback:', err);
   }
 
   return checkMemoryLimit(key, config);
+}
+
+/**
+ * Claim the single-use grant a visit token carries for one route. The first
+ * claim for a given token and route wins; any later claim is refused, so a
+ * captured token cannot be replayed to make more upstream calls.
+ */
+export async function claimVisitGrant(visitId: string, route: string): Promise<'granted' | 'already_used'> {
+  const key = `weather-mood:visit:${visitId}:${route}`;
+  try {
+    const results = await upstashPipeline([
+      ['SET', key, 1, 'NX', 'EX', VISIT_TOKEN_TTL_SECONDS],
+    ]);
+    if (results) {
+      return results[0]?.result === 'OK' ? 'granted' : 'already_used';
+    }
+  } catch (err) {
+    console.error('[visit-grant] Upstash unavailable, using memory fallback:', err);
+  }
+
+  const now = Date.now();
+  const expiresAt = memoryGrants.get(key);
+  if (expiresAt && expiresAt > now) return 'already_used';
+  memoryGrants.set(key, now + VISIT_TOKEN_TTL_SECONDS * 1000);
+  return 'granted';
+}
+
+/**
+ * Guard for the paid audio routes: per-IP rate limit, then a valid visit
+ * token, then the token's single-use grant for this route, then the daily
+ * spend cap. Order matters: the cheap checks run first and the spend is only
+ * reserved for a request that will actually reach the upstream API.
+ */
+export async function guardAudioRequest(
+  request: NextRequest,
+  config: LimitConfig & { bucket: SpendRoute },
+): Promise<NextResponse | null> {
+  const limited = await guardGenerationRequest(request, config);
+  if (limited) return limited;
+
+  const verdict = verifyVisitToken(request.headers.get(VISIT_TOKEN_HEADER));
+  if (!verdict.ok) {
+    if (verdict.reason === 'disabled') {
+      console.error('[visit-token] VISIT_TOKEN_SECRET is not set; audio routes are disabled.');
+      return NextResponse.json({ error: 'Audio generation unavailable' }, { status: 503 });
+    }
+    return NextResponse.json(
+      { error: 'A valid visit token is required', reason: verdict.reason },
+      { status: 401 },
+    );
+  }
+
+  const grant = await claimVisitGrant(verdict.claims.id, config.bucket);
+  if (grant === 'already_used') {
+    return NextResponse.json({ error: 'This visit has already used this audio route' }, { status: 409 });
+  }
+
+  const spend = await reserveSpend(config.bucket);
+  if (!spend.allowed) {
+    console.warn(`[spend-cap] Daily cap reached: ${spend.spentCents}c of ${spend.capCents}c (shared=${spend.shared})`);
+    return NextResponse.json({ error: 'Daily audio budget reached. Try again tomorrow.' }, { status: 503 });
+  }
+
+  return null;
 }
 
 export async function parseJsonBody(request: NextRequest, maxBodyBytes: number): Promise<unknown> {

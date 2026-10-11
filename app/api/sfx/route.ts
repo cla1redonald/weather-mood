@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { elevenlabsFetch } from '@/lib/elevenlabs/client';
 import {
-  guardGenerationRequest,
+  guardAudioRequest,
   InvalidJsonError,
   parseJsonBody,
   RequestBodyTooLargeError,
@@ -15,7 +15,7 @@ interface SfxInput {
 }
 
 const SFX_LIMIT = {
-  bucket: 'sfx',
+  bucket: 'sfx' as const,
   maxRequests: 12,
   windowSeconds: 60,
   maxBodyBytes: 2 * 1024,
@@ -45,7 +45,7 @@ function buildSfxPrompt(input: SfxInput): string {
 }
 
 export async function POST(request: NextRequest) {
-  const guarded = await guardGenerationRequest(request, SFX_LIMIT);
+  const guarded = await guardAudioRequest(request, SFX_LIMIT);
   if (guarded) return guarded;
 
   if (!process.env.ELEVENLABS_API_KEY) {
