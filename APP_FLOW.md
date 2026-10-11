@@ -9,10 +9,10 @@
 | Route | Purpose | Auth |
 |-------|---------|------|
 | `/` | Main (and only) page -- full-screen generative experience | None |
-| `/api/mood` | Claude Haiku — generates poem, visual profile, voice persona, `musicDirection`, and `ambienceDirection` from weather data | Server-side API key (`ANTHROPIC_API_KEY`) |
-| `/api/narrate` | ElevenLabs TTS — narrates poem using `eleven_multilingual_v2`; speaks `poemLocal` for supported locales, falls back to English `poem` | Server-side API key (`ELEVENLABS_API_KEY`) |
-| `/api/music` | ElevenLabs music generation — ~30s instrumental piece from Claude's `musicDirection` prompt | Server-side API key (`ELEVENLABS_API_KEY`) |
-| `/api/sfx` | ElevenLabs sound generation — ambient field-recording soundscape from Claude's `ambienceDirection` prompt (truncated to 450 chars) | Server-side API key (`ELEVENLABS_API_KEY`) |
+| `/api/mood` | Claude Sonnet 5.5: generates poem, visual profile, voice persona, `musicDirection`, and `ambienceDirection` from weather data | Server-side API key (`ANTHROPIC_API_KEY`) |
+| `/api/narrate` | ElevenLabs TTS: narrates poem using `eleven_multilingual_v2`; speaks `poemLocal` for supported locales, falls back to English `poem` | Server-side API key (`ELEVENLABS_API_KEY`) |
+| `/api/music` | ElevenLabs music generation: ~30s instrumental piece from Claude's `musicDirection` prompt | Server-side API key (`ELEVENLABS_API_KEY`) |
+| `/api/sfx` | ElevenLabs sound generation: ambient field-recording soundscape from Claude's `ambienceDirection` prompt (truncated to 450 chars) | Server-side API key (`ELEVENLABS_API_KEY`) |
 
 **Query Parameters:**
 | Param | Example | Purpose |
@@ -434,7 +434,7 @@ When `/api/mood` returns a `languageCode`, the client sends both `poem` (English
 /api/narrate receives poem + poemLocal + languageCode
          │
          ├── languageCode supported by eleven_multilingual_v2
-         │   (e.g. 'fr', 'ja', 'pt', 'de' — 33 locales total)
+         │   (e.g. 'fr', 'ja', 'pt', 'de'; 33 locales total)
          │         │
          │         ▼
          │   Narrate poemLocal in local language
@@ -530,7 +530,9 @@ Each weather condition maps to a distinct visual treatment.
 
 ## Audio Mode Reference
 
-All audio is synthesized in real-time via Web Audio API. No audio files.
+> **Removed.** The Web Audio synth described below was taken out. All audio now comes from ElevenLabs: narration, generated music and generated ambience (see the API table at the top). This section is kept as a record of the original design.
+
+The original synth generated all audio in real time via the Web Audio API, with no audio files.
 
 ### Base Layer (always active)
 - **Oscillator:** Sine wave

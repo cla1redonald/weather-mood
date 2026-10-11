@@ -1,125 +1,43 @@
 # Weather Mood
 
-A full-screen generative art experience that transforms real-time weather data into immersive visual, audio, and poetic moments. Enter any city and watch particles dance with the wind, colors shift with temperature, ambient tones pulse with humidity, an AI-generated poem capture the mood — then hear it narrated aloud in the local language over generative music and ambient sound.
+Weather Mood turns any city's live weather into a generative canvas with a poem, a voice and a score. Then Claude looks at a screenshot of its own work, critiques it against the weather, and redraws it while you watch, three rounds at most.
 
-![Weather Mood Screenshot](Screenshot showing a full-screen canvas with flowing particles in shades of blue and grey for rainy London, with a poem overlay at the bottom reading: "Grey skies weep gently / Thames reflects silver sorrow / London's quiet tears")
+**Try it:** [weather-mood-chi.vercel.app](https://weather-mood-chi.vercel.app)
 
-## Features
+![Weather Mood: generative art driven by real-time weather](assets/social-preview.png)
 
-Weather Mood creates a unique, layered experience for every city and weather condition:
+## What you will see
 
-### 1. Visual Layer (Canvas 2D)
-- **6 weather modes**: Rain, Snow, Clear, Cloudy, Storm, Wind
-- **Procedural particle system** with up to 500 particles (desktop) or 200 (mobile)
-- **Weather-driven parameters**:
-  - Temperature → color palette (cold blues to warm ambers)
-  - Wind → particle velocity and direction
-  - Humidity → particle density and blur
-  - Cloud cover → background depth and opacity
-- **Smooth transitions** between cities (2-second cross-fade)
+1. **Pick a city.** Type a name or press the random button. The current weather comes from Open-Meteo.
+2. **The canvas paints itself.** Claude reads the weather and designs a full-screen scene for that place and moment: the colours of the sky, how particles fall or drift, glow, cloud texture, ripples or lightning.
+3. **A poem appears.** Four to six lines in English, written for that city in that weather, then read aloud in the city's own language over music and ambient sound generated for the moment.
+4. **Claude reviews its own work.** A short line under the search bar narrates it: "Round 2 of 3: the grey feels flat for a humid afternoon, adding amber". Each revision fades in over two seconds. It stops when the piece passes, after three rounds, or after 45 seconds, and if a revision came out worse, it goes back to the best version. Press Skip to stop it at any point.
 
-### 2. Audio Layer (Web Audio API)
-- **4 synthesized sound layers**:
-  - Base tone: Temperature-driven pitch (80Hz cold to 300Hz hot)
-  - Wind modulation: LFO wobble intensity tied to wind speed
-  - Humidity filter: Low-pass filter cutoff (dry = crisp, humid = muffled)
-  - Precipitation layer: Filtered white noise for rain/snow
-- **All audio is synthesized** — no audio files, no dependencies
-- **Mute/unmute control** with visual hint (M key or on-screen button)
+If your device asks for reduced motion, the review loop does not run. If Claude declines or replies with something unusable, the page uses a hand-written scene for that kind of weather; if Claude cannot be reached at all, the canvas is drawn from the weather data alone.
 
-### 3. Poetry Layer (Claude API)
-- **AI-generated poems** tailored to specific city + weather conditions, always in English
-- **Local-language translation** (`poemLocal`) generated alongside the English poem for narration
-- **No caching** — every visit produces a fresh poem, music direction, and ambience direction
-- **Graceful degradation**: App works fully even if Claude API is unavailable
+## How the self-critique works
 
-### 4. ElevenLabs Audio Layer
-- **Narration** (`/api/narrate`): poem read aloud using `eleven_multilingual_v2`. For the 33 supported locales the local-language `poemLocal` is narrated; all other languages fall back to the English `poem`. Each voice persona has per-voice tuning (stability, style, speed).
-- **Generative music** (`/api/music`): ~30 seconds of instrumental music generated from Claude's `musicDirection` prompt, matched to the city and weather. Requires a paid ElevenLabs plan (Starter or higher).
-- **Ambient SFX** (`/api/sfx`): field-recording-style soundscape generated from Claude's `ambienceDirection` prompt. The prompt is truncated to fit ElevenLabs' 450-character limit before dispatch.
-- **Narration is cached** by poem hash + voice + language (1-hour in-memory TTL). Music and SFX are not cached — they are regenerated each visit.
+After the first draft is on screen, the page waits three seconds for the particles to settle, takes a 768 by 432 screenshot of the canvas and sends it to Claude with the weather and the scene's settings.
 
-## Tech Stack
+Claude is asked to review it as someone else's work, and to name at least one concrete defect or say why there is none. It scores five things from 1 to 5, each with one sentence of evidence: whether the palette fits the temperature and the conditions, whether the particle density suits the weather, whether the poem will be readable over its part of the frame, whether the eye has somewhere to rest, and whether it feels like this city rather than anywhere with this weather. It also writes one sentence for the viewer and proposes changes to only the settings it would alter.
 
-- **Framework**: Next.js 14 (App Router)
-- **Language**: TypeScript (strict mode)
-- **Styling**: Tailwind CSS
-- **Rendering**: Canvas 2D API + simplex-noise (~2KB)
-- **Audio**: Web Audio API (no libraries)
-- **AI — Poem + Visual Profile**: Claude API via `@anthropic-ai/sdk` (model: `claude-haiku-4-5-20251001`)
-- **AI — Narration, Music, SFX**: ElevenLabs REST API via `lib/elevenlabs/client.ts` (direct `fetch`, no SDK)
-- **APIs**: Open-Meteo (weather & geocoding, no key required)
-- **Testing**: Vitest + React Testing Library
-- **Deployment**: Vercel
+Claude does not decide whether its own work passes. The code does: the piece is accepted only if every score is at least 4. Separate arithmetic checks on the screenshot (a blank frame, a frame too dark or too washed out to read, a frame that has turned to noise) force a revision whatever Claude scored. Every proposed change is clamped to the renderer's safe ranges before it is drawn.
 
-## Getting Started
+Each round scores the version on screen, so the loop never ends on a revision nobody has scored: it keeps the best-scoring version and rolls back to it if the last one scored lower.
 
-### Prerequisites
+## What is tested
 
-- Node.js 18+
-- npm
-- (Optional) Anthropic API key for poem generation
-- (Optional) ElevenLabs API key for narration, music, and SFX
+313 tests in 26 files, all run in CI on every pull request, with no network calls. Every Claude test uses a real SDK client whose network layer is stubbed, so the SDK's own request building and structured-output parsing run.
 
-### Installation
+| Area | Tests | Covers |
+|---|---|---|
+| Self-critique | 83 | The critique route (token, round cap, image limits, spend cap, verdicts, patches), cost-abuse cases (concurrent requests, per-address limits, expired tokens, a shared store that is down), capture, the browser loop's stop conditions and best-version rollback, the ticker, and the offline eval |
+| Director | 25 | Structured outputs, refusal, truncation and malformed replies falling back cleanly, the model setting, and the prompt |
+| Audio and cost controls | 37 | Visit tokens, single-use audio grants, rate limits, the daily spend cap, and audio playback |
+| Canvas and weather | 128 | Weather classification and edge cases, normalisation, palettes, particles, and the weather pipeline end to end |
+| Interface | 40 | City search, mute, poem overlay and weather panel |
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/weather-mood.git
-   cd weather-mood
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. (Optional) Set up environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-
-   Add your API keys to `.env`:
-   ```
-   ANTHROPIC_API_KEY=your_anthropic_key_here
-   ELEVENLABS_API_KEY=your_elevenlabs_key_here
-   ```
-
-4. Run the development server:
-   ```bash
-   npm run dev
-   ```
-
-5. Open [http://localhost:3000](http://localhost:3000) in your browser
-
-### Available Scripts
-
-- `npm run dev` — Start development server
-- `npm run build` — Build for production
-- `npm run start` — Start production server
-- `npm run lint` — Run ESLint
-- `npm test` — Run tests with Vitest
-- `npm run typecheck` — Run TypeScript type checking
-
-## Environment Variables
-
-Create a `.env` file in the project root with:
-
-```bash
-# Anthropic API key for poem + visual profile generation (optional)
-# Get your key from: https://console.anthropic.com/
-ANTHROPIC_API_KEY=your_anthropic_key_here
-
-# ElevenLabs API key for narration, music, and SFX (optional)
-# Get your key from: https://elevenlabs.io/
-# Note: music generation and library voices require a paid plan (Starter or higher).
-# SFX and narration work on the free tier.
-ELEVENLABS_API_KEY=your_elevenlabs_key_here
-```
-
-**Note**: The app works without either key. Without `ANTHROPIC_API_KEY` poems will not generate; without `ELEVENLABS_API_KEY` narration, music, and SFX will not play. The visual and Web Audio layers always function.
-
-See `.env.example` for the full list, including the cost controls below.
+**Critic evals.** `evals/critic-bad-frames/` has eight synthetic frames with expected verdicts: blank, all black, white on white, over-dense clutter, a good frame, and three legitimate controls (a dark storm, a bright snowfall, the renderer at its particle limit) that must not be flagged. Offline, the arithmetic checks get all 8 of 8 right. The live number, Claude's verdicts on the five frames that have an expected verdict, is pending: nobody has run `npm run eval:critic -- --live` yet (about 9 cents).
 
 ## Cost Controls
 
@@ -132,123 +50,106 @@ Five controls keep a public deployment bounded:
 - **Visit tokens.** `/api/mood` returns a short-lived signed token. The music, sfx, narrate and critique routes refuse any request without one (401). Each token is good for one call per audio route (a replay gets 409) and three critique rounds (a fourth gets 429), counted on the server. So no paid route can be used as an open proxy: every call costs the caller a mood generation first. Set `VISIT_TOKEN_SECRET` in production; without it those routes return 503 rather than run unprotected.
 - **Per-visitor limits.** `/api/mood` allows 4 generations per 10 minutes and 12 per day per IP. `/api/critique` allows 12 per 10 minutes and 36 per day per IP, so one address can spend at most 72 cents a day on critiques.
 - **Image limits.** The critique route accepts only a 768 by 432 JPEG of at most 150 KB, checked on the decoded bytes.
-- **Daily spend cap.** Each paid route reserves its estimated cost against a daily total before it calls upstream. Past `WEATHER_MOOD_DAILY_CAP_CENTS` (default 1000, so $10, about 43 full visits) paid routes return 503 and the page falls back to the hand-written profiles and silence.
+- **Daily spend cap.** Each paid route reserves its estimated cost against a daily total before it calls upstream. Past `WEATHER_MOOD_DAILY_CAP_CENTS` (default 1000, so $10, about 43 full visits) paid routes return 503 and the page falls back to visuals drawn from the weather data and silence.
 - **Shared state.** With `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` set, the limits, grants, critique rounds and cap are shared across serverless instances. Without them each instance keeps its own counters, which is a much weaker bound, and the logs say so. If Upstash is configured but unreachable, critique rounds are refused rather than counted per instance.
 
 Set a hard spend limit at the provider as well (Anthropic console, ElevenLabs plan). These controls bound a bad day; they are not a substitute for a provider-side cap.
 
-## How It Works
+## For developers
 
-### Architecture Overview
+### Tech stack
 
-Weather Mood uses a unidirectional data flow:
+- **Framework:** Next.js 14 (App Router), TypeScript in strict mode, Tailwind CSS
+- **Rendering:** Canvas 2D with simplex-noise
+- **Claude:** `@anthropic-ai/sdk` with `messages.parse` and zod schemas (structured outputs). Two roles, both Claude Sonnet 5.5 by default and set in `lib/claude/config.ts`: the director writes the poem and designs the scene, voice and score directions; the critic reviews screenshots. Override with `WEATHER_MOOD_DIRECTOR_MODEL` and `WEATHER_MOOD_CRITIC_MODEL`.
+- **Audio:** ElevenLabs REST API via `lib/elevenlabs/client.ts` for narration, music and ambience. There is no in-browser synthesiser; an earlier Web Audio synth was removed.
+- **Weather:** Open-Meteo weather and geocoding (no key needed)
+- **Screenshot checks:** `jpeg-js` decodes the critic's JPEG on the server for the pixel checks
+- **Testing:** Vitest and React Testing Library
+- **Hosting:** Vercel, with optional Upstash Redis for shared limits
 
-1. **City Search** (Open-Meteo Geocoding) → Lat/Lon
-2. **Weather Fetch** (Open-Meteo Weather API) → Raw weather data
-3. **Classification** (WMO codes) → Weather condition (rain, snow, clear, etc.)
-4. **Normalization** → All values mapped to 0-1 range
-5. **Distribution** → Normalized params drive visual, Web Audio, and AI engines
+### Getting started
 
-```
-┌─────────────┐
-│ City Search │
-└──────┬──────┘
-       │
-       v
-┌─────────────┐
-│Weather Fetch│
-└──────┬──────┘
-       │
-       v
-┌─────────────┐      ┌────────────┐
-│ Normalize   ├─────►│ Visual     │
-│ Parameters  │      │ Engine     │
-└──────┬──────┘      └────────────┘
-       │
-       ├────────────►┌────────────┐
-       │             │ Web Audio  │
-       │             │ Engine     │
-       │             └────────────┘
-       │
-       └────────────►┌──────────────────┐
-                     │ /api/mood        │
-                     │ (Claude Haiku)   │
-                     │ poem + visual    │
-                     │ profile + voice  │
-                     │ + musicDirection │
-                     │ + ambienceDir.   │
-                     └────────┬─────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              v               v               v
-       ┌────────────┐  ┌────────────┐  ┌────────────┐
-       │/api/narrate│  │/api/music  │  │  /api/sfx  │
-       │(ElevenLabs)│  │(ElevenLabs)│  │(ElevenLabs)│
-       └────────────┘  └────────────┘  └────────────┘
+You need Node.js 18 or later and npm. API keys are optional: without `ANTHROPIC_API_KEY` there is no poem or critique and the canvas is drawn from the weather data alone; without `ELEVENLABS_API_KEY` it is silent.
+
+```bash
+git clone https://github.com/cla1redonald/weather-mood.git
+cd weather-mood
+npm install
+cp .env.example .env.local   # then add your keys
+npm run dev                  # http://localhost:3000
 ```
 
-### Weather Classification
+### Scripts
 
-Weather is classified into 6 conditions based on WMO weather codes:
+- `npm run dev`: development server
+- `npm run build`: production build
+- `npm run start`: serve the production build
+- `npm run lint`: ESLint
+- `npm run typecheck`: TypeScript
+- `npm test`: Vitest (`npx vitest run` for a single pass)
+- `npm run eval:critic`: the critic eval, offline; add `-- --live` to include the model (costs money)
 
-| Condition | WMO Codes | Description |
+### Environment variables
+
+`.env.example` lists every variable with comments: `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`, `WEATHER_MOOD_DIRECTOR_MODEL`, `WEATHER_MOOD_CRITIC_MODEL`, `VISIT_TOKEN_SECRET`, `WEATHER_MOOD_DAILY_CAP_CENTS`, and the Upstash pair.
+
+### Architecture
+
+```
+City search (Open-Meteo geocoding)
+        |
+Weather fetch (Open-Meteo) --> classify and normalise --> canvas (fallback scene)
+        |
+/api/mood   director: poem, scene, voice, music and ambience directions, visit token
+        |
+        +--> /api/narrate  (ElevenLabs speech, in the local language)
+        +--> /api/music    (ElevenLabs music)
+        +--> /api/sfx      (ElevenLabs ambience)
+        |
+        +--> critique loop in the browser, up to 3 rounds:
+               screenshot --> /api/critique (critic: scores and patch)
+                          --> verdict in code --> crossfade to the revision
+```
+
+Key files:
+
+- `app/api/mood/route.ts`: the director call, with fallbacks for refusal, truncation and malformed replies
+- `app/api/critique/route.ts`: the critic call and every limit in front of it
+- `lib/critique/`: capture, pixel checks, rubric schema, patching, verdict, the browser loop
+- `hooks/useSelfCritique.ts` and `components/CritiqueTicker.tsx`: the loop's state and its on-screen narration
+- `lib/canvas/renderer.ts`: the renderer, with a two-second crossfade on every profile change
+
+### Weather classification
+
+When Claude's scene is not available, the canvas falls back to one of six conditions from the WMO weather code:
+
+| Condition | WMO codes | Description |
 |-----------|-----------|-------------|
 | **Rain** | 51-67, 80-82 | Drizzle, rain, rain showers |
 | **Snow** | 71-77, 85-86 | Snow, snow showers |
-| **Clear** | 0-3 (wind ≤40 km/h) | Clear to partly cloudy |
+| **Clear** | 0-3 (wind 40 km/h or less) | Clear to partly cloudy |
 | **Cloudy** | 45-48 | Overcast, fog |
 | **Storm** | 95-99 | Thunderstorm |
-| **Wind** | 0-3 (wind >40 km/h) | Clear sky with high wind |
+| **Wind** | 0-3 (wind over 40 km/h) | Clear sky with high wind |
 
-### Data Normalization
+Weather values are normalised to 0 to 1: temperature from -20°C to 45°C, wind from 0 to 100 km/h, humidity and cloud cover from 0% to 100%.
 
-All weather parameters are normalized to a 0-1 range:
+### Deployment
 
-- **Temperature**: -20°C (0.0) → 45°C (1.0)
-- **Wind Speed**: 0 km/h (0.0) → 100 km/h (1.0)
-- **Humidity**: 0% (0.0) → 100% (1.0)
-- **Cloud Cover**: 0% (0.0) → 100% (1.0)
-
-## Testing
-
-The project has 193 tests across 13 files.
-
-Run tests:
-```bash
-npm test
-```
-
-## Deployment
-
-### Deploy to Vercel
-
-1. Push your code to GitHub
-2. Import the project in [Vercel](https://vercel.com)
-3. Add environment variables in Vercel project settings:
-   - `ANTHROPIC_API_KEY` (optional)
-   - `ELEVENLABS_API_KEY` (optional — music requires a paid ElevenLabs plan)
-4. Deploy
-
-The app will be live at `https://your-project.vercel.app`
-
-### Manual Deployment
-
-```bash
-npm run build
-npm run start
-```
+The project deploys on Vercel. Set `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY` (music needs a paid ElevenLabs plan), `VISIT_TOKEN_SECRET` and, ideally, the Upstash pair in the project settings. CI runs lint, typecheck, Vitest and `next build` on every pull request.
 
 ## Credits
 
-- **Weather Data**: [Open-Meteo](https://open-meteo.com) (free weather API)
-- **Poem + Visual Profile**: [Claude API](https://www.anthropic.com/api) by Anthropic
-- **Narration, Music, SFX**: [ElevenLabs](https://elevenlabs.io)
-- **Noise Generation**: [simplex-noise](https://github.com/jwagner/simplex-noise.js)
+- **Weather data:** [Open-Meteo](https://open-meteo.com)
+- **Poem, scene and critique:** [Claude](https://www.anthropic.com/api) by Anthropic
+- **Narration, music and ambience:** [ElevenLabs](https://elevenlabs.io)
+- **Noise:** [simplex-noise](https://github.com/jwagner/simplex-noise.js)
 
-## License
+## Licence
 
 MIT
 
 ---
 
-**Built with [Claude Code](https://claude.com/claude-code)**
+Built with [Claude Code](https://claude.com/claude-code)

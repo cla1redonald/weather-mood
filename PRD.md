@@ -696,11 +696,11 @@ MVP is complete when:
 ## Creative Vision v2: Every Visit Is a Teleportation
 
 > **Updated:** 2026-02-07
-> **Status:** SHIPPED (commit 4197c4d and prior — multilingual narration, ambienceDirection truncation, and all v2 features are live)
+> **Status:** SHIPPED (commit 4197c4d and prior: multilingual narration, ambienceDirection truncation, and all v2 features are live)
 
 ### The Shift
 
-v1 cached creative content by city+condition and used hardcoded cultural mappings (Tokyo = koto, Paris = accordion). This made the experience feel predetermined. v2 makes every single visit fully generative — Claude interprets the weather, the city, and the moment, and everything flows from that single interpretation.
+v1 cached creative content by city+condition and used hardcoded cultural mappings (Tokyo = koto, Paris = accordion). This made the experience feel predetermined. v2 makes every single visit fully generative. Claude interprets the weather, the city, and the moment, and everything flows from that single interpretation.
 
 ### Core Principles
 
@@ -714,15 +714,15 @@ v1 cached creative content by city+condition and used hardcoded cultural mapping
 
 | Aspect | v1 | v2 |
 |--------|----|----|
-| Mood caching | 1hr TTL by city+condition | None — fresh Claude generation every visit |
+| Mood caching | 1hr TTL by city+condition | None: fresh Claude generation every visit |
 | Music prompts | 14 hardcoded city→instrument mappings | Claude generates `musicDirection` per visit |
 | SFX prompts | 14 hardcoded city→ambience mappings | Claude generates `ambienceDirection` per visit |
 | Weather data to AI | condition, temp, humidity, wind, cloud | + WMO code (granular), wind direction, UV index |
-| Music/SFX caching | 1hr TTL by city+condition | None — fresh ElevenLabs generation every visit |
+| Music/SFX caching | 1hr TTL by city+condition | None: fresh ElevenLabs generation every visit |
 | Narration caching | By poem hash | Kept (poems are unique, so narration is unique) |
 
 ### Success Looks Like (v2)
 
 - Visit Tokyo twice in the same rainy afternoon → two completely different poems, two different musical pieces, two different visual palettes
-- The music for a foggy morning in San Francisco feels nothing like a foggy morning in London — different instruments, different tempo, different emotional register
+- The music for a foggy morning in San Francisco feels nothing like a foggy morning in London: different instruments, different tempo, different emotional register
 - A friend says "it felt like I was actually there" not "cool visualization"
