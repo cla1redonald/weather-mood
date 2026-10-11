@@ -9,6 +9,8 @@ interface FetchAllParams {
   languageCode?: string;
   musicDirection: string;
   ambienceDirection: string;
+  /** Issued by /api/mood; required by the audio routes, single use per route */
+  visitToken?: string | null;
 }
 
 export interface UseElevenLabsAudioReturn {
@@ -383,12 +385,15 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
 
       const useProgressive = canUseMediaSource();
 
+      const audioHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (params.visitToken) audioHeaders['x-visit-token'] = params.visitToken;
+
       // Fetch music
       async function fetchMusic() {
         try {
           const res = await fetch('/api/music', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: audioHeaders,
             body: JSON.stringify({
               musicDirection: params.musicDirection,
               poem: params.poem,
@@ -483,7 +488,7 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
         try {
           const res = await fetch('/api/sfx', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: audioHeaders,
             body: JSON.stringify({
               ambienceDirection: params.ambienceDirection,
             }),
@@ -572,7 +577,7 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
         try {
           const res = await fetch('/api/narrate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: audioHeaders,
             body: JSON.stringify({
               poem: params.poem,           // English fallback for unsupported languages
               poemLocal: params.poemLocal, // Local-language version (used when supported)
@@ -673,7 +678,7 @@ export function useElevenLabsAudio(): UseElevenLabsAudioReturn {
     }; // end startFetches
 
     startFetches();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const mute = useCallback(() => {

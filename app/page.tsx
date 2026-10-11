@@ -143,6 +143,7 @@ function HomeContent() {
               languageCode: data.languageCode || undefined,
               musicDirection: data.musicDirection || '',
               ambienceDirection: data.ambienceDirection || '',
+              visitToken: data.visitToken ?? null,
             });
           }
         } else {

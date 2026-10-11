@@ -6,7 +6,7 @@ import {
   audioCacheKey,
 } from '@/lib/elevenlabs/client';
 import {
-  guardGenerationRequest,
+  guardAudioRequest,
   InvalidJsonError,
   parseJsonBody,
   RequestBodyTooLargeError,
@@ -30,7 +30,7 @@ const VOICE_ID_MAP: Record<string, string> = {
 const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel
 
 const NARRATE_LIMIT = {
-  bucket: 'narrate',
+  bucket: 'narrate' as const,
   maxRequests: 12,
   windowSeconds: 60,
   maxBodyBytes: 12 * 1024,
@@ -108,7 +108,7 @@ function hashPoem(poem: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const guarded = await guardGenerationRequest(request, NARRATE_LIMIT);
+  const guarded = await guardAudioRequest(request, NARRATE_LIMIT);
   if (guarded) return guarded;
 
   if (!process.env.ELEVENLABS_API_KEY) {

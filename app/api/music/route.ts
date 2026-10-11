@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { elevenlabsFetch } from '@/lib/elevenlabs/client';
 import {
-  guardGenerationRequest,
+  guardAudioRequest,
   InvalidJsonError,
   parseJsonBody,
   RequestBodyTooLargeError,
@@ -16,7 +16,7 @@ interface MusicInput {
 }
 
 const MUSIC_LIMIT = {
-  bucket: 'music',
+  bucket: 'music' as const,
   maxRequests: 4,
   windowSeconds: 60,
   maxBodyBytes: 8 * 1024,
@@ -46,7 +46,7 @@ function buildMusicPrompt(input: MusicInput): string {
 }
 
 export async function POST(request: NextRequest) {
-  const guarded = await guardGenerationRequest(request, MUSIC_LIMIT);
+  const guarded = await guardAudioRequest(request, MUSIC_LIMIT);
   if (guarded) return guarded;
 
   if (!process.env.ELEVENLABS_API_KEY) {
@@ -102,4 +102,7 @@ export async function POST(request: NextRequest) {
       );
     }
   }
+
+  // Unreachable: the loop returns on success and on the final failed attempt.
+  return NextResponse.json({ error: 'Failed to generate music' }, { status: 500 });
 }
