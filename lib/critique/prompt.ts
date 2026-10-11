@@ -7,7 +7,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { MoodInput } from '@/lib/poem';
 import type { VisualProfile } from '@/types/mood';
 import type { PixelReport } from '@/lib/critique/pixels';
-import { MAX_CRITIQUE_ROUNDS } from '@/lib/critique/limits';
+import { CAPTURE_SETTLE_MS, MAX_CRITIQUE_ROUNDS } from '@/lib/critique/limits';
 
 export function buildCriticSystemPrompt(): string {
   return `You review generative weather art made by another artist. Each piece is a live canvas for one city's current weather: a background gradient, drifting particles and a few effects (ripples, lightning, cloud noise, glow), all set by a visual profile you will be shown.
@@ -48,6 +48,7 @@ export function buildCriticUserContent(input: CriticInput): Anthropic.ContentBlo
     `City: ${place}.`,
     `Weather now: ${weather.condition}, ${weather.temperature}°C, ${weather.humidity}% humidity, ${weather.windSpeed} km/h wind, ${weather.cloudCover}% cloud cover, UV index ${weather.uvIndex}.`,
     `Review round ${round} of ${MAX_CRITIQUE_ROUNDS}.`,
+    `The screenshot was taken about ${Math.round(CAPTURE_SETTLE_MS / 1000)} seconds after this profile was applied. Particles spawn at ${profile.particles.spawnRate} per second up to ${profile.particles.maxCount}, so a sparse field may still be filling in: judge density with those values in mind.`,
     '',
     'Measured pixel statistics (Rec. 709 luma, 0 to 255):',
     `- mean luminance ${pixels.meanLuminance}, standard deviation ${pixels.luminanceStdDev}`,

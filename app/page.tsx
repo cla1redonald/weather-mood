@@ -13,8 +13,10 @@ import MuteToggle from '@/components/MuteToggle';
 import PoemOverlay from '@/components/PoemOverlay';
 import LoadingOverlay from '@/components/LoadingOverlay';
 import LandingOverlay from '@/components/LandingOverlay';
+import CritiqueTicker from '@/components/CritiqueTicker';
 import { useElevenLabsAudio } from '@/hooks/useElevenLabsAudio';
 import { useLandingAudio } from '@/hooks/useLandingAudio';
+import { useSelfCritique } from '@/hooks/useSelfCritique';
 import { LANDING_VISUAL_PROFILE } from '@/lib/canvas/landingProfile';
 
 function HomeContent() {
@@ -36,6 +38,13 @@ function HomeContent() {
   // Audio — ElevenLabs only (synth removed)
   const elevenLabs = useElevenLabsAudio();
   const isMuted = elevenLabs.isMuted;
+
+  // Claude critiques a screenshot of its own canvas and revises it, up to
+  // three rounds. Each revision goes through setVisualProfile, so the
+  // renderer crossfades to it.
+  const captureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const critique = useSelfCritique(setVisualProfile);
+  const { start: startCritique, cancel: cancelCritique, skip: skipCritique } = critique;
 
   // Landing ambient audio
   const landingAudio = useLandingAudio();
@@ -75,6 +84,9 @@ function HomeContent() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    // A new city ends any critique of the previous one.
+    cancelCritique();
+
     // Exit landing state and fade out landing audio
     setIsLanding(false);
     landingAudio.fadeOut();
@@ -105,23 +117,25 @@ function HomeContent() {
       url.searchParams.set('city', city.name);
       window.history.pushState({}, '', url);
 
+      const moodInput = {
+        city: city.name,
+        country: city.country,
+        temperature: weather.temperature,
+        condition: weather.condition,
+        humidity: weather.humidity,
+        windSpeed: weather.windSpeed,
+        cloudCover: weather.cloudCover,
+        weatherCode: weather.weatherCode,
+        windDirection: weather.windDirection,
+        uvIndex: weather.uvIndex,
+      };
+
       // Fetch mood (poem + sound profile + visual profile)
       try {
         const response = await fetch('/api/mood', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            city: city.name,
-            country: city.country,
-            temperature: weather.temperature,
-            condition: weather.condition,
-            humidity: weather.humidity,
-            windSpeed: weather.windSpeed,
-            cloudCover: weather.cloudCover,
-            weatherCode: weather.weatherCode,
-            windDirection: weather.windDirection,
-            uvIndex: weather.uvIndex,
-          }),
+          body: JSON.stringify(moodInput),
           signal: controller.signal,
         });
 
@@ -145,6 +159,17 @@ function HomeContent() {
               ambienceDirection: data.ambienceDirection || '',
               visitToken: data.visitToken ?? null,
             });
+
+            // With the first draft on screen and the audio on its way, let
+            // Claude look at what it made.
+            if (data.visual) {
+              startCritique({
+                profile: data.visual,
+                weather: moodInput,
+                visitToken: data.visitToken,
+                getCanvas: () => captureCanvasRef.current,
+              });
+            }
           }
         } else {
           console.error('Mood API error:', response.status, await response.text().catch(() => ''));
@@ -168,7 +193,7 @@ function HomeContent() {
         setIsLoadingWeather(false);
       }
     }
-  }, [elevenLabs]);
+  }, [elevenLabs, startCritique, cancelCritique]);
 
   // Handle city selection
   const handleCitySelect = loadWeatherForCity;
@@ -209,6 +234,7 @@ function HomeContent() {
         visualProfile={visualProfile ?? ((isLanding || isTransitioning) ? LANDING_VISUAL_PROFILE : null)}
         isAudioLoading={elevenLabs.isLoading}
         isTransitioning={isTransitioning}
+        captureRef={captureCanvasRef}
       />
 
       {/* Layer 2: Landing Overlay (z-10) — title + tagline */}
@@ -224,6 +250,7 @@ function HomeContent() {
       <WeatherInfo weather={weatherData} isLoading={isLoadingWeather} countryCode={countryCode} languageCode={languageCode} />
       <CitySearch onCitySelect={handleCitySelect} onRandomCity={handleCitySelect} defaultCity={defaultCity} />
       <MuteToggle isMuted={isMuted} onToggle={handleToggleMute} />
+      <CritiqueTicker state={critique.state} onSkip={skipCritique} />
     </main>
   );
 }
