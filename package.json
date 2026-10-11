@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval:critic": "node --import tsx evals/critic-bad-frames/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
