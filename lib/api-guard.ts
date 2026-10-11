@@ -137,29 +137,44 @@ export async function claimVisitGrant(visitId: string, route: string): Promise<'
   return 'granted';
 }
 
+export type RoundClaim =
+  | { status: 'granted'; round: number }
+  | { status: 'over_cap'; round: number }
+  | { status: 'unavailable' };
+
 /**
- * Count one critique round against a visit token. The count lives in the same
- * store as the single-use grants and expires with the token, so a token buys
- * at most `maxRounds` critic calls however the client behaves.
+ * Count one critique round against a visit token, atomically, before any
+ * model call. With Upstash configured the count is a single INCR on a key tied
+ * to the token id, so concurrent requests on any instance each get a distinct
+ * number and at most `maxRounds` of them are granted. The key's expiry is
+ * reset to the token lifetime on every claim, so it always outlives the token
+ * it counts for.
+ *
+ * Unlike the rate limiter, this fails closed: if Upstash is configured but
+ * unreachable, the round is refused rather than counted in per-instance
+ * memory, where each instance would grant its own three rounds. Memory is
+ * used only when Upstash is not configured at all.
  */
-export async function claimCritiqueRound(
-  visitId: string,
-  maxRounds: number,
-): Promise<{ allowed: boolean; round: number }> {
+export async function claimCritiqueRound(visitId: string, maxRounds: number): Promise<RoundClaim> {
   const key = `weather-mood:visit:${visitId}:critique-rounds`;
-  try {
-    const results = await upstashPipeline([
-      ['INCR', key],
-      ['EXPIRE', key, VISIT_TOKEN_TTL_SECONDS],
-    ]);
-    if (results) {
-      const round = Number(results[0]?.result ?? maxRounds + 1);
-      return { allowed: round <= maxRounds, round };
+
+  if (upstashConfigured()) {
+    try {
+      const results = await upstashPipeline([
+        ['INCR', key],
+        ['EXPIRE', key, VISIT_TOKEN_TTL_SECONDS],
+      ]);
+      const round = Number(results?.[0]?.result);
+      if (!results || !Number.isFinite(round)) return { status: 'unavailable' };
+      return round <= maxRounds ? { status: 'granted', round } : { status: 'over_cap', round };
+    } catch (err) {
+      console.error('[critique-rounds] Upstash unavailable; refusing the round:', err);
+      return { status: 'unavailable' };
     }
-  } catch (err) {
-    console.error('[critique-rounds] Upstash unavailable, using memory fallback:', err);
   }
 
+  // Synchronous read-modify-write: no await between the read and the write,
+  // so concurrent requests in this process cannot both take the same round.
   const now = Date.now();
   const current = memoryRounds.get(key);
   const counter = current && current.expiresAt > now
@@ -167,7 +182,9 @@ export async function claimCritiqueRound(
     : { count: 0, expiresAt: now + VISIT_TOKEN_TTL_SECONDS * 1000 };
   counter.count += 1;
   memoryRounds.set(key, counter);
-  return { allowed: counter.count <= maxRounds, round: counter.count };
+  return counter.count <= maxRounds
+    ? { status: 'granted', round: counter.count }
+    : { status: 'over_cap', round: counter.count };
 }
 
 /**

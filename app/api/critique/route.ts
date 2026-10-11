@@ -2,9 +2,15 @@
  * POST /api/critique: Claude looks at a screenshot of the canvas it designed,
  * scores it against the weather, and proposes a patch.
  *
- * Checks run cheapest first, and nothing is spent until the request is known
- * to be valid: per-IP limit, visit token, body and image validation, the
- * per-token round cap, then the daily spend cap, then the model call.
+ * Order matters, and every step before the model call can refuse:
+ *   1. visit token (401; an expired token is refused whatever its counter says)
+ *   2. per-IP burst and daily limits, own buckets (429)
+ *   3. body read with a byte cap on the actual body, not content-length (413)
+ *   4. input and image validation on the decoded bytes (400, 413)
+ *   5. per-token round claim, atomic in the shared store (429, or 503 if the
+ *      store is configured but unreachable)
+ *   6. daily spend reservation (503)
+ *   7. the model call
  */
 import { NextRequest, NextResponse } from 'next/server';
 import {
@@ -33,13 +39,24 @@ import type { CritiqueResponse } from '@/lib/critique/types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// Three rounds per mood, and the mood route allows four moods per ten minutes.
 // The body allowance covers a 150 KB image as base64 plus the profile.
+const MAX_BODY_BYTES = Math.ceil((MAX_CRITIQUE_IMAGE_BYTES * 4) / 3) + 16 * 1024;
+
+// Three rounds per mood, matching the mood route's four moods per ten minutes
+// and twelve a day. The daily bucket bounds one address to 36 critiques, 72
+// cents, so no single visitor can spend the day's cap alone.
 const CRITIQUE_LIMIT = {
   bucket: 'critique',
-  maxRequests: 12,
+  maxRequests: 4 * MAX_CRITIQUE_ROUNDS,
   windowSeconds: 10 * 60,
-  maxBodyBytes: Math.ceil((MAX_CRITIQUE_IMAGE_BYTES * 4) / 3) + 16 * 1024,
+  maxBodyBytes: MAX_BODY_BYTES,
+};
+
+const CRITIQUE_DAILY_LIMIT = {
+  bucket: 'critique-day',
+  maxRequests: 12 * MAX_CRITIQUE_ROUNDS,
+  windowSeconds: 24 * 60 * 60,
+  maxBodyBytes: MAX_BODY_BYTES,
 };
 
 const PIXEL_FAILURE_TEXT: Record<PixelFailure, string> = {
@@ -61,9 +78,6 @@ function publicPixels(report: PixelReport): CritiqueResponse['pixels'] {
 }
 
 export async function POST(request: NextRequest) {
-  const limited = await guardGenerationRequest(request, CRITIQUE_LIMIT);
-  if (limited) return limited;
-
   const token = verifyVisitToken(request.headers.get(VISIT_TOKEN_HEADER));
   if (!token.ok) {
     if (token.reason === 'disabled') {
@@ -73,9 +87,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'A valid visit token is required', reason: token.reason }, { status: 401 });
   }
 
+  const limited = await guardGenerationRequest(request, CRITIQUE_LIMIT);
+  if (limited) return limited;
+  const limitedDaily = await guardGenerationRequest(request, CRITIQUE_DAILY_LIMIT);
+  if (limitedDaily) return limitedDaily;
+
   let body: unknown;
   try {
-    body = await parseJsonBody(request, CRITIQUE_LIMIT.maxBodyBytes);
+    body = await parseJsonBody(request, MAX_BODY_BYTES);
   } catch (err) {
     if (err instanceof RequestBodyTooLargeError) {
       return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
@@ -101,18 +120,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Image must be a 768x432 JPEG data URL', reason: decoded.reason }, { status: 400 });
   }
 
+  // Checked before the round claim so a misconfigured deploy burns no rounds.
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json({ error: 'Critique unavailable' }, { status: 503 });
+  }
+
   // The server's own count is the authority; the client's round is a hint.
   const claim = await claimCritiqueRound(token.claims.id, MAX_CRITIQUE_ROUNDS);
-  if (!claim.allowed) {
+  if (claim.status === 'unavailable') {
+    return NextResponse.json({ error: 'Critique unavailable' }, { status: 503 });
+  }
+  if (claim.status === 'over_cap') {
     return NextResponse.json(
       { error: `This visit has used all ${MAX_CRITIQUE_ROUNDS} critique rounds` },
       { status: 429, headers: { 'Retry-After': '900' } },
     );
-  }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Critique unavailable' }, { status: 503 });
   }
 
   const spend = await reserveSpend('critique');
