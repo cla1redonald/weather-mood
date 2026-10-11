@@ -34,12 +34,14 @@ describe('daily spend cap (memory mode)', () => {
   });
 
   it('counts every route against the same daily total', async () => {
-    vi.stubEnv('WEATHER_MOOD_DAILY_CAP_CENTS', '10');
+    const { mood, music, critique } = ROUTE_COST_CENTS;
+    vi.stubEnv('WEATHER_MOOD_DAILY_CAP_CENTS', String(mood + music + critique));
     const now = Date.parse('2026-10-11T12:00:00Z');
 
-    expect((await reserveSpend('mood', now)).allowed).toBe(true);     // 1
-    expect((await reserveSpend('music', now)).allowed).toBe(true);    // 9
-    expect((await reserveSpend('narrate', now)).allowed).toBe(false); // 12
+    expect((await reserveSpend('mood', now)).allowed).toBe(true);
+    expect((await reserveSpend('music', now)).allowed).toBe(true);
+    expect((await reserveSpend('critique', now)).allowed).toBe(true);
+    expect((await reserveSpend('narrate', now)).allowed).toBe(false);
   });
 
   it('starts a fresh total on a new day', async () => {
@@ -50,5 +52,16 @@ describe('daily spend cap (memory mode)', () => {
     expect((await reserveSpend('music', today)).allowed).toBe(false);
     expect((await reserveSpend('sfx', tomorrow)).allowed).toBe(true);
     expect(spendKeyFor(today)).not.toBe(spendKeyFor(tomorrow));
+  });
+});
+
+describe('per-visit cost', () => {
+  it('reserves about 10 cents of Claude per visit: one director call and three critic rounds', () => {
+    const claude = ROUTE_COST_CENTS.mood + 3 * ROUTE_COST_CENTS.critique;
+    expect(claude).toBe(10);
+  });
+
+  it('keeps the default daily cap at $10', () => {
+    expect(dailyCapCents()).toBe(1000);
   });
 });

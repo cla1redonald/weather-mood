@@ -10,8 +10,14 @@
  */
 import { upstashPipeline } from '@/lib/upstash';
 
+// Claude figures are for Claude Sonnet 5.5 at $2 / $10 per million input /
+// output tokens. The director reads about 6,500 tokens of prompt and schema and
+// writes 1,500 to 2,000 including low-effort thinking: about 3 cents. A critic
+// round reads about 3,400 tokens including the 768x432 image (about 420) and
+// writes about 1,000: about 1.7 cents. A full visit is about 8 cents of
+// Claude; these reserve 10.
 export const ROUTE_COST_CENTS = {
-  mood: 1,     // one Claude call
+  mood: 4,     // one director call on Sonnet 5.5
   music: 8,    // 30 seconds of generated music
   sfx: 2,      // 10 seconds of generated ambience
   narrate: 3,  // a few hundred characters of speech

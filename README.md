@@ -123,12 +123,17 @@ See `.env.example` for the full list, including the cost controls below.
 
 ## Cost Controls
 
-Every visit makes one Claude call and three ElevenLabs calls, and ElevenLabs is most of the cost. Four controls keep a public deployment bounded:
+A visit makes one Claude call to design the piece, up to three Claude calls to critique it, and three ElevenLabs calls for the audio.
 
-- **Visit tokens.** `/api/mood` returns a short-lived signed token. The music, sfx and narrate routes refuse any request without one (401), and each token is good for exactly one call per route (a replay gets 409). So the audio routes cannot be used as open proxies: an ElevenLabs call always costs the caller a mood generation first. Set `VISIT_TOKEN_SECRET` in production; without it the audio routes return 503 rather than run unprotected.
-- **Per-visitor limits.** `/api/mood` allows 4 generations per 10 minutes and 12 per day per IP.
-- **Daily spend cap.** Each paid route reserves an estimated cost (cents, rounded up) against a daily total. Past `WEATHER_MOOD_DAILY_CAP_CENTS` (default 1000, so $10) paid routes return 503 and the page falls back to parametric visuals and silence.
-- **Shared state.** With `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` set, the limits, grants and cap are shared across serverless instances. Without them each instance keeps its own counters, which is a much weaker bound, and the logs say so.
+**What a visit costs.** On Claude Sonnet 5.5 ($2 / $10 per million input / output tokens) the director call is about 3 cents and each critic round about 1.7 cents (a 768 by 432 screenshot is about 420 input tokens), so about 8 cents of Claude per visit with all three rounds. ElevenLabs comes on top and is still the larger share. The spend cap reserves rounded-up figures: 4 cents for the director, 2 cents per critique round, 8 for music, 2 for ambience and 3 for narration, 23 cents for a full visit.
+
+Five controls keep a public deployment bounded:
+
+- **Visit tokens.** `/api/mood` returns a short-lived signed token. The music, sfx, narrate and critique routes refuse any request without one (401). Each token is good for one call per audio route (a replay gets 409) and three critique rounds (a fourth gets 429), counted on the server. So no paid route can be used as an open proxy: every call costs the caller a mood generation first. Set `VISIT_TOKEN_SECRET` in production; without it those routes return 503 rather than run unprotected.
+- **Per-visitor limits.** `/api/mood` allows 4 generations per 10 minutes and 12 per day per IP. `/api/critique` allows 12 per 10 minutes and 36 per day per IP, so one address can spend at most 72 cents a day on critiques.
+- **Image limits.** The critique route accepts only a 768 by 432 JPEG of at most 150 KB, checked on the decoded bytes.
+- **Daily spend cap.** Each paid route reserves its estimated cost against a daily total before it calls upstream. Past `WEATHER_MOOD_DAILY_CAP_CENTS` (default 1000, so $10, about 43 full visits) paid routes return 503 and the page falls back to the hand-written profiles and silence.
+- **Shared state.** With `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` set, the limits, grants, critique rounds and cap are shared across serverless instances. Without them each instance keeps its own counters, which is a much weaker bound, and the logs say so. If Upstash is configured but unreachable, critique rounds are refused rather than counted per instance.
 
 Set a hard spend limit at the provider as well (Anthropic console, ElevenLabs plan). These controls bound a bad day; they are not a substitute for a provider-side cap.
 
