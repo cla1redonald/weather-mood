@@ -17,6 +17,7 @@ type Counter = {
 
 const memoryCounters = new Map<string, Counter>();
 const memoryGrants = new Map<string, number>();
+const memoryRounds = new Map<string, Counter>();
 
 export class RequestBodyTooLargeError extends Error {
   constructor() {
@@ -134,6 +135,39 @@ export async function claimVisitGrant(visitId: string, route: string): Promise<'
   if (expiresAt && expiresAt > now) return 'already_used';
   memoryGrants.set(key, now + VISIT_TOKEN_TTL_SECONDS * 1000);
   return 'granted';
+}
+
+/**
+ * Count one critique round against a visit token. The count lives in the same
+ * store as the single-use grants and expires with the token, so a token buys
+ * at most `maxRounds` critic calls however the client behaves.
+ */
+export async function claimCritiqueRound(
+  visitId: string,
+  maxRounds: number,
+): Promise<{ allowed: boolean; round: number }> {
+  const key = `weather-mood:visit:${visitId}:critique-rounds`;
+  try {
+    const results = await upstashPipeline([
+      ['INCR', key],
+      ['EXPIRE', key, VISIT_TOKEN_TTL_SECONDS],
+    ]);
+    if (results) {
+      const round = Number(results[0]?.result ?? maxRounds + 1);
+      return { allowed: round <= maxRounds, round };
+    }
+  } catch (err) {
+    console.error('[critique-rounds] Upstash unavailable, using memory fallback:', err);
+  }
+
+  const now = Date.now();
+  const current = memoryRounds.get(key);
+  const counter = current && current.expiresAt > now
+    ? current
+    : { count: 0, expiresAt: now + VISIT_TOKEN_TTL_SECONDS * 1000 };
+  counter.count += 1;
+  memoryRounds.set(key, counter);
+  return { allowed: counter.count <= maxRounds, round: counter.count };
 }
 
 /**

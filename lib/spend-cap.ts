@@ -15,6 +15,7 @@ export const ROUTE_COST_CENTS = {
   music: 8,    // 30 seconds of generated music
   sfx: 2,      // 10 seconds of generated ambience
   narrate: 3,  // a few hundred characters of speech
+  critique: 2, // one critic call: a 768x432 screenshot plus a scored rubric
 } as const;
 
 export type SpendRoute = keyof typeof ROUTE_COST_CENTS;
