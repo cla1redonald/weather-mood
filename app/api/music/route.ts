@@ -102,4 +102,7 @@ export async function POST(request: NextRequest) {
       );
     }
   }
+
+  // Unreachable: the loop returns on success and on the final failed attempt.
+  return NextResponse.json({ error: 'Failed to generate music' }, { status: 500 });
 }

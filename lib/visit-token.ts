@@ -7,6 +7,12 @@
  * by /api/mood and must be presented in the `x-visit-token` header. Each route
  * then claims a single-use grant for the token (see api-guard.ts), so one mood
  * generation buys at most one music, one sfx and one narration call.
+ *
+ * Scope, deliberately: the token is a bearer credential and is not bound to a
+ * client address, because a visitor's address can change between the mood call
+ * and the audio calls (mobile networks, carrier NAT). What bounds misuse of a
+ * captured token is the single-use grant per route plus the per-IP and daily
+ * limits on /api/mood that every token must be paid for with.
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
