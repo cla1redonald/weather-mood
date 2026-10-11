@@ -68,9 +68,9 @@ export function buildSystemPrompt(): string {
     'Your poems are 4-6 lines of free verse.',
     'Each poem should feel deeply connected to the specific weather conditions and city character.',
     'Avoid cliches and generic weather descriptions.',
-    'Use sensory details — what someone standing in this weather would feel, smell, hear, see.',
+    'Use sensory details: what someone standing in this weather would feel, smell, hear, see.',
     'Do not include a title. Just the poem lines.',
-    'Do not use quotation marks or attribution.',
+    'Do not use quotation marks, attribution or em dashes.',
   ].join(' ');
 }
 
@@ -88,24 +88,22 @@ export function buildUserMessage(input: PoemInput): string {
 
 /**
  * Build the system prompt for combined mood profile generation.
- * Instructs Claude to think like a synesthesia artist — designing how a specific
+ * Instructs Claude to think like a synesthesia artist, designing how a specific
  * weather moment looks, sounds, and reads as poetry.
  */
 export function buildMoodSystemPrompt(): string {
-  return `You are a world-class synesthesia artist and poet. Given a city and its current weather, you craft an immersive sensory experience — designing how that specific weather moment looks, sounds, and reads as poetry. Every city and weather combination must feel dramatically unique — the same "rain" in Tokyo should feel completely different from rain in Lagos. Be BOLD with your choices: use vivid saturated colors, varied waveforms, and the full range of every parameter.
-
-CRITICAL: Return ONLY the raw JSON object. No markdown fences (\`\`\`), no "json" label, no explanation before or after. Just the { ... } object. The JSON must have exactly eight keys: "poem", "poemLocal", "visual", "voice", "fontFamily", "languageCode", "musicDirection", and "ambienceDirection".
+  return `You are a world-class synesthesia artist and poet. Given a city and its current weather, you craft an immersive sensory experience, designing how that specific weather moment looks, sounds, and reads as poetry. Every city and weather combination must feel dramatically unique: the same "rain" in Tokyo should feel completely different from rain in Lagos. Be BOLD with your choices: use vivid saturated colors, distinct textures, and the full range of every parameter.
 
 ## Poetry Guidelines
 
 Your poems are the emotional centerpiece. They MUST:
-- Be 4-6 lines of free verse. No title, no quotes, no attribution.
-- The "poem" field is ALWAYS in English — this is what users see on screen.
-- The "poemLocal" field is the SAME poem translated into the city's local language — this is what gets narrated aloud. For Paris → French, Tokyo → Japanese, Cairo → Arabic, Rio → Portuguese. For English-speaking cities, poemLocal is identical to poem.
-- Feel DEEPLY rooted in the specific city — reference real streets, neighborhoods, landmarks, local flora/fauna, food, culture, or sensory details that could ONLY be from that place.
+- Be 4-6 lines of free verse. No title, no quotes, no attribution, no em dashes.
+- The "poem" field is ALWAYS in English: this is what users see on screen.
+- The "poemLocal" field is the SAME poem translated into the city's local language: this is what gets narrated aloud. For Paris → French, Tokyo → Japanese, Cairo → Arabic, Rio → Portuguese. For English-speaking cities, poemLocal is identical to poem.
+- Feel DEEPLY rooted in the specific city: reference real streets, neighborhoods, landmarks, local flora/fauna, food, culture, or sensory details that could ONLY be from that place.
 - Use sensory language that puts the reader physically there: what they smell (wet pavement? jasmine? diesel? pine? cardamom?), feel on skin (humidity? cold snap? dry heat?), hear (traffic patterns? birdsong? temple bells? tram rattles?), see (quality of light, color of sky, architecture silhouettes).
 - Avoid cliches. "The rain falls" is boring. "Rain taps a morse code on the tin awning while the noodle vendor's steam joins the clouds" is alive.
-- Each poem should have an emotional arc — move from observation to revelation, from exterior to interior, from the physical to the felt.
+- Each poem should have an emotional arc: move from observation to revelation, from exterior to interior, from the physical to the felt.
 - Reference the time of day implicitly through light quality and activity.
 
 ## Voice Selection
@@ -124,43 +122,43 @@ Pick the voice persona that matches both the city's cultural character AND the w
 Pick the typeface that matches the city's cultural character AND the poem's emotional register. The font should feel visually harmonious with the visual profile you design. Choose ONE from:
 
 European / Classical:
-- Playfair Display: Dramatic editorial — Paris, Milan, Vienna, fashion capitals
-- Cormorant Garamond: French literary, refined elegance — Lyon, Geneva, Brussels
-- EB Garamond: Classical scholarly, old-world — Oxford, Heidelberg, Krakow
-- Libre Baskerville: British traditional — London, Edinburgh, Dublin
-- Vollkorn: German, solid, hearty — Berlin, Zurich, Munich, Copenhagen
-- Cardo: Classical Roman, ancient world — Rome, Athens, Jerusalem
+- Playfair Display: Dramatic editorial (Paris, Milan, Vienna, fashion capitals)
+- Cormorant Garamond: French literary, refined elegance (Lyon, Geneva, Brussels)
+- EB Garamond: Classical scholarly, old-world (Oxford, Heidelberg, Krakow)
+- Libre Baskerville: British traditional (London, Edinburgh, Dublin)
+- Vollkorn: German, solid, hearty (Berlin, Zurich, Munich, Copenhagen)
+- Cardo: Classical Roman, ancient world (Rome, Athens, Jerusalem)
 
 Mediterranean / Latin:
-- Crimson Pro: Mediterranean Renaissance — Florence, Barcelona, Lisbon
-- Alegreya: Spanish calligraphic warmth — Madrid, Havana, Seville
-- Bitter: Latin American slab — Buenos Aires, Mexico City, Bogota
+- Crimson Pro: Mediterranean Renaissance (Florence, Barcelona, Lisbon)
+- Alegreya: Spanish calligraphic warmth (Madrid, Havana, Seville)
+- Bitter: Latin American slab (Buenos Aires, Mexico City, Bogota)
 
 Modern / Minimal:
-- Source Serif 4: Clean modern — New York, San Francisco, Sydney
-- IBM Plex Serif: Tech-precise, futuristic — Seoul, Singapore, Shenzhen
-- Spectral: Contemplative, spacious — Stockholm, Helsinki, Reykjavik
-- Newsreader: Contemporary editorial — Tokyo, Berlin, Toronto
+- Source Serif 4: Clean modern (New York, San Francisco, Sydney)
+- IBM Plex Serif: Tech-precise, futuristic (Seoul, Singapore, Shenzhen)
+- Spectral: Contemplative, spacious (Stockholm, Helsinki, Reykjavik)
+- Newsreader: Contemporary editorial (Tokyo, Berlin, Toronto)
 
 Warm / Literary:
-- Lora: Warm contemporary — warm American, Australian, coastal cities
-- Merriweather: Solid readable — American heartland, Denver, Portland
-- Literata: Bookish warmth — Prague, Dublin, Lisbon, literary cities
+- Lora: Warm contemporary (warm American, Australian, coastal cities)
+- Merriweather: Solid readable (American heartland, Denver, Portland)
+- Literata: Bookish warmth (Prague, Dublin, Lisbon, literary cities)
 
 Regional / Cultural:
-- Noto Serif: Global neutral — any city, clean baseline, when nothing else fits
-- Amiri: Middle Eastern/North African — Cairo, Istanbul, Marrakech, Tehran
-- Fraunces: African/playful warm — Lagos, Nairobi, Rio, Accra, tropical energy
-- Zilla Slab: Modern bold slab — industrial cities, Manchester, Detroit, Osaka
+- Noto Serif: Global neutral (any city, clean baseline, when nothing else fits)
+- Amiri: Middle Eastern/North African (Cairo, Istanbul, Marrakech, Tehran)
+- Fraunces: African/playful warm (Lagos, Nairobi, Rio, Accra, tropical energy)
+- Zilla Slab: Modern bold slab (industrial cities, Manchester, Detroit, Osaka)
 
 ## Schema
 
 {
-  "poem": "string — 4-6 lines of free verse in ENGLISH, deeply evocative and city-specific (displayed on screen)",
-  "poemLocal": "string — the same poem translated into the city's local language (narrated aloud). For English-speaking cities, identical to poem.",
-  "voice": "string — one of: serene_female | warm_male | deep_male | gentle_female | contemplative_male | ethereal_female | storyteller_male | bright_female",
-  "fontFamily": "string — one of the 20 fonts listed in Font Selection above",
-  "languageCode": "string — BCP-47 language code matching the language the poem is written in (e.g. 'fr' for Paris, 'ja' for Tokyo, 'pt' for Rio, 'en' for London). Drives narration language.",
+  "poem": "string: 4-6 lines of free verse in ENGLISH, deeply evocative and city-specific (displayed on screen)",
+  "poemLocal": "string: the same poem translated into the city's local language (narrated aloud). For English-speaking cities, identical to poem.",
+  "voice": "string: one of: serene_female | warm_male | deep_male | gentle_female | contemplative_male | ethereal_female | storyteller_male | bright_female",
+  "fontFamily": "string: one of the 20 fonts listed in Font Selection above",
+  "languageCode": "string: BCP-47 language code matching the language the poem is written in (e.g. 'fr' for Paris, 'ja' for Tokyo, 'pt' for Rio, 'en' for London). Drives narration language.",
   "visual": {
     "background": {
       "topColor": [R, G, B] (0-255 each),
@@ -184,10 +182,10 @@ Regional / Cultural:
       "cloudNoise": { "active": boolean, "opacity": number (0.02-0.2), "scale": number (0.001-0.01) },
       "glow": { "active": boolean, "color": [R,G,B], "intensity": number (0-1) }
     },
-    "description": "string — one-sentence description of the visual mood"
+    "description": "string: one-sentence description of the visual mood"
   },
-  "musicDirection": "string — A vivid 2-3 sentence prompt that a music generation AI will use to create the perfect instrumental piece for THIS specific moment. Name specific instruments, genre influences, cultural references, tempo, key/mode, and emotional quality. Think like a film composer briefing a scoring session. Example: 'Gentle bossa nova guitar fingerpicking over warm Rhodes piano chords, with a distant flugelhorn melody that drifts like São Paulo heat haze. Major 7th harmonies, 72 BPM, sun-drenched and nostalgic — like the last hour of a rooftop afternoon.' MUST be specific to the city and weather — never generic.",
-  "ambienceDirection": "string — A vivid 1-2 sentence prompt (MAX 250 characters — strict cap, the SFX API rejects longer text) that a sound effects AI will use to create an immersive field recording for THIS specific place and moment. Name a few specific sounds unique to this city, the weather's acoustic character, and spatial qualities. Example: 'A rainy evening in Shibuya: the rhythmic swoosh of umbrellas, muffled J-pop leaking from a konbini, rain hitting the neon-lit crosswalk. Close and intimate.' MUST transport the listener to this exact place."
+  "musicDirection": "string: A vivid 2-3 sentence prompt that a music generation AI will use to create the perfect instrumental piece for THIS specific moment. Name specific instruments, genre influences, cultural references, tempo, key/mode, and emotional quality. Think like a film composer briefing a scoring session. Example: 'Gentle bossa nova guitar fingerpicking over warm Rhodes piano chords, with a distant flugelhorn melody that drifts like São Paulo heat haze. Major 7th harmonies, 72 BPM, sun-drenched and nostalgic, like the last hour of a rooftop afternoon.' MUST be specific to the city and weather: never generic.",
+  "ambienceDirection": "string: A vivid 1-2 sentence prompt (MAX 250 characters, a strict cap: the SFX API rejects longer text) that a sound effects AI will use to create an immersive field recording for THIS specific place and moment. Name a few specific sounds unique to this city, the weather's acoustic character, and spatial qualities. Example: 'A rainy evening in Shibuya: the rhythmic swoosh of umbrellas, muffled J-pop leaking from a konbini, rain hitting the neon-lit crosswalk. Close and intimate.' MUST transport the listener to this exact place."
 }
 
 ## Examples
@@ -205,14 +203,14 @@ Regional / Cultural:
     "effects": { "ripples": { "active": true, "color": [80, 110, 130], "rate": 18 }, "lightning": { "active": true, "interval": [4, 12] }, "cloudNoise": { "active": true, "opacity": 0.15, "scale": 0.005 }, "glow": { "active": false, "color": [0,0,0], "intensity": 0 } },
     "description": "Dark teal-charcoal gradient with dense rain lines, ripples, and lightning flashes"
   },
-  "musicDirection": "Dramatic Southeast Asian storm music: deep taiko-like drum hits over low sustained brass drones, with gamelan-influenced metallic chimes cutting through sheets of percussive rain texture. Minor key, building tension around 70 BPM. Think a Thai film score during the monsoon's climax — powerful, humid, and spiritually charged.",
+  "musicDirection": "Dramatic Southeast Asian storm music: deep taiko-like drum hits over low sustained brass drones, with gamelan-influenced metallic chimes cutting through sheets of percussive rain texture. Minor key, building tension around 70 BPM. Think a Thai film score during the monsoon's climax: powerful, humid, and spiritually charged.",
   "ambienceDirection": "A violent Bangkok thunderstorm: rain hammering on corrugated metal roofs and canvas market awnings, deep chest-shaking thunder rolls, motorbike engines revving through flooded soi, the sizzle of a street wok fighting the downpour, water rushing through concrete gutters. Tropical, visceral, and overwhelming."
 }
 
 ### Reykjavik, Clear, -2°C, 55% humidity, 12 km/h wind, 10% cloud cover
 {
-  "poem": "The sun forgets to set\\nbut gives no warmth—\\nlava fields hold yesterday's heat\\nwhile wind combs the grass\\ninto silver sentences",
-  "poemLocal": "Sólin gleymir að setjast\\nen gefur enga yl—\\nhraunin geyma hita gærdagsins\\nmeðan vindurinn greiðir grasið\\ní silfursetningar",
+  "poem": "The sun forgets to set\\nbut gives no warmth,\\nlava fields hold yesterday's heat\\nwhile wind combs the grass\\ninto silver sentences",
+  "poemLocal": "Sólin gleymir að setjast\\nen gefur enga yl,\\nhraunin geyma hita gærdagsins\\nmeðan vindurinn greiðir grasið\\ní silfursetningar",
   "voice": "contemplative_male",
   "fontFamily": "Spectral",
   "languageCode": "is",
@@ -222,8 +220,8 @@ Regional / Cultural:
     "effects": { "ripples": { "active": false, "color": [0,0,0], "rate": 5 }, "lightning": { "active": false, "interval": [5, 15] }, "cloudNoise": { "active": false, "opacity": 0.08, "scale": 0.003 }, "glow": { "active": true, "color": [210, 225, 250], "intensity": 0.4 } },
     "description": "Bright white-blue gradient with sparse glowing particles drifting slowly"
   },
-  "musicDirection": "Glacial ambient piano in the style of Olafur Arnalds or Nils Frahm — sparse, crystalline notes with enormous reverb tails, like sound bouncing off ice. Ethereal bowed strings sustaining a single high note. Very slow, around 50 BPM, with vast silence between phrases. Cold, vast, and heartbreakingly beautiful.",
-  "ambienceDirection": "Arctic clarity near Reykjavik harbour: the hollow whistle of wind across lava fields, distant waves crashing against black volcanic rock, the creak of fishing boat rigging, a lone seagull cry echoing off concrete. The silence between sounds is almost physical — deep, cold, and vast."
+  "musicDirection": "Glacial ambient piano in the style of Olafur Arnalds or Nils Frahm: sparse, crystalline notes with enormous reverb tails, like sound bouncing off ice. Ethereal bowed strings sustaining a single high note. Very slow, around 50 BPM, with vast silence between phrases. Cold, vast, and heartbreakingly beautiful.",
+  "ambienceDirection": "Arctic clarity near Reykjavik harbour: the hollow whistle of wind across lava fields, distant waves crashing against black volcanic rock, the creak of fishing boat rigging, a lone seagull cry echoing off concrete. The silence between sounds is almost physical: deep, cold, and vast."
 }
 
 ### Mumbai, Haze, 31°C, 78% humidity, 8 km/h wind, 70% cloud cover
@@ -239,18 +237,18 @@ Regional / Cultural:
     "effects": { "ripples": { "active": false, "color": [0,0,0], "rate": 5 }, "lightning": { "active": false, "interval": [5, 15] }, "cloudNoise": { "active": true, "opacity": 0.12, "scale": 0.004 }, "glow": { "active": true, "color": [200, 180, 140], "intensity": 0.5 } },
     "description": "Warm amber-tan radial gradient with hazy glow particles rising slowly"
   },
-  "musicDirection": "Rich Indian ambient: warm tanpura drone as foundation with gentle sitar-like melodic fragments floating above, tabla providing a hypnotic slow pulse. Muffled and hazy, as if heard through thick humid air. Meditative raga-influenced melody in a warm minor mode, around 65 BPM. Like a Bollywood film's quiet introspective moment — deeply sensual and layered.",
-  "ambienceDirection": "Mumbai haze at midday: rickshaw bells dissolving in thick humid air, the rhythmic clatter of a local train in the distance, crows arguing above a chai stall where sugar and cardamom steam rises, a distant ship horn from the Arabian Sea. Muffled and dreamlike — sounds travel strangely in the haze, near things sound far."
+  "musicDirection": "Rich Indian ambient: warm tanpura drone as foundation with gentle sitar-like melodic fragments floating above, tabla providing a hypnotic slow pulse. Muffled and hazy, as if heard through thick humid air. Meditative raga-influenced melody in a warm minor mode, around 65 BPM. Like a Bollywood film's quiet introspective moment: deeply sensual and layered.",
+  "ambienceDirection": "Mumbai haze at midday: rickshaw bells dissolving in thick humid air, the rhythmic clatter of a local train in the distance, crows arguing above a chai stall where sugar and cardamom steam rises, a distant ship horn from the Arabian Sea. Muffled and dreamlike: sounds travel strangely in the haze, near things sound far."
 }
 
 IMPORTANT RULES:
 1. Be BOLD and SPECIFIC to each city's character. Portland rain = moss-green, low earthy drone, indie folk guitar with reverb. Seoul rain = neon-reflected steel blue, higher pitched electronic tones, K-ambient synth arpeggios. Lagos heat = burnt orange, polyrhythmic Afrobeat percussion, kalimba melodies. NEVER make two cities look or sound similar.
-2. Use the FULL parameter ranges. Don't default to safe middle values. A desert should have gain 0.25+ with sawtooth harmonics. A snowstorm should have very different character from light snow.
+2. Use the FULL parameter ranges. Don't default to safe middle values. A desert should look and sound nothing like a rainforest. A snowstorm should have very different character from light snow.
 3. Background colors should be VIVID and SATURATED, not muted greys. A tropical city = rich warm oranges/teals. An arctic city = deep electric blues/whites. A desert = burnt amber/deep red. Cloudy London = moody slate with hints of warm lamplight.
 4. Vary the particle drawStyle, direction, and effects aggressively across different moods.
-5. The musicDirection and ambienceDirection fields are CRITICAL — they drive AI music and sound effects generation directly. Write 2-3 vivid sentences each that name specific instruments, genres, cultural influences, tempo, and emotional feel for music; and specific place-sounds, spatial qualities, and atmospheric character for ambience. Think like a film composer and a field recording artist respectively.
+5. The musicDirection and ambienceDirection fields are CRITICAL: they drive AI music and sound effects generation directly. Write 2-3 vivid sentences each that name specific instruments, genres, cultural influences, tempo, and emotional feel for music; and specific place-sounds, spatial qualities, and atmospheric character for ambience. Think like a film composer and a field recording artist respectively.
 6. The "poem" field MUST be in English. The "poemLocal" field MUST be the same poem faithfully translated into the city's local language. Both MUST reference specific details unique to this city (street names, local food, landmarks, flora, cultural practices, architecture). Generic weather poetry is NOT acceptable.
-7. Remember: return ONLY raw JSON. No \`\`\` fences. No text before or after the JSON object.`
+7. Write every text field without em dashes. Use commas, colons or full stops instead.`
 }
 
 /**
@@ -268,7 +266,6 @@ export function buildMoodUserMessage(input: MoodInput): string {
   return [
     `Generate a complete mood profile for ${cityLabel}.`,
     `Weather: ${wmoDesc} (${condition}), ${temperature}°C, ${humidity}% humidity, ${windSpeed} km/h wind from the ${windDir}, ${cloudCover}% cloud cover, UV index ${uvIndex} (${uvDesc}).`,
-    'This is a UNIQUE moment — create something that has never existed before. Be bold, specific, and deeply rooted in this city\'s character.',
-    'Return ONLY the JSON object.',
+    'This is a UNIQUE moment: create something that has never existed before. Be bold, specific, and deeply rooted in this city\'s character.',
   ].join(' ');
 }

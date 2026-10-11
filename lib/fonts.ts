@@ -45,7 +45,7 @@ export const FONT_CONFIG: Record<string, FontConfig> = {
 
 export const VALID_FONTS = Object.keys(FONT_CONFIG);
 
-const DEFAULT_FONT = 'Lora';
+export const DEFAULT_FONT = 'Lora';
 
 export function validateFont(name: unknown): string {
   if (typeof name === 'string' && VALID_FONTS.includes(name)) {
