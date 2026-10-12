@@ -19,7 +19,7 @@ export default function CritiqueTicker({ state, onSkip }: CritiqueTickerProps) {
 
   return (
     <div
-      className="fixed top-52 lg:top-[5.5rem] left-1/2 -translate-x-1/2 z-20 w-[calc(100%-2rem)] max-w-[560px]"
+      className="fixed top-[15rem] lg:top-[9.5rem] left-1/2 -translate-x-1/2 z-20 w-[calc(100%-2rem)] max-w-[560px]"
       style={{ animation: 'fade-in 0.6s ease-out both' }}
     >
       <div

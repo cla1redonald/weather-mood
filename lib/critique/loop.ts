@@ -17,7 +17,24 @@ import type { VisualProfile } from '@/types/mood';
 import type { MoodInput } from '@/lib/poem';
 import type { CritiqueResponse } from '@/lib/critique/types';
 import type { Verdict } from '@/lib/critique/verdict';
-import { CRITIQUE_BUDGET_MS, MAX_CRITIQUE_ROUNDS } from '@/lib/critique/limits';
+import { CRITIQUE_BUDGET_MS, CRITIQUE_ROUND_TIMEOUT_MS, MAX_CRITIQUE_ROUNDS } from '@/lib/critique/limits';
+
+/**
+ * A signal that fires when `parent` fires or after `ms`, whichever is first,
+ * so one slow critique cannot hold the loop open indefinitely.
+ */
+function withRoundTimeout(parent: AbortSignal, ms: number): AbortSignal {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort('round-timeout'), ms);
+  const forward = () => {
+    clearTimeout(timer);
+    controller.abort(parent.reason);
+  };
+  if (parent.aborted) forward();
+  else parent.addEventListener('abort', forward, { once: true });
+  controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+  return controller.signal;
+}
 
 export type LoopStop = 'accepted' | 'round_cap' | 'budget' | 'stalled' | 'error' | 'skipped' | 'aborted';
 
@@ -56,6 +73,8 @@ export interface LoopOptions {
   fetchImpl?: typeof fetch;
   maxRounds?: number;
   budgetMs?: number;
+  /** Abandon a single critique request after this long. */
+  roundTimeoutMs?: number;
   now?: () => number;
 }
 
@@ -79,7 +98,8 @@ interface Version {
 export async function runCritiqueLoop(options: LoopOptions): Promise<LoopResult> {
   const {
     initialProfile, weather, visitToken, capture, apply, signal, onRoundStart, onRound,
-    fetchImpl = fetch, maxRounds = MAX_CRITIQUE_ROUNDS, budgetMs = CRITIQUE_BUDGET_MS, now = Date.now,
+    fetchImpl = fetch, maxRounds = MAX_CRITIQUE_ROUNDS, budgetMs = CRITIQUE_BUDGET_MS,
+    roundTimeoutMs = CRITIQUE_ROUND_TIMEOUT_MS, now = Date.now,
   } = options;
 
   const internal = new AbortController();
@@ -130,7 +150,7 @@ export async function runCritiqueLoop(options: LoopOptions): Promise<LoopResult>
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-visit-token': visitToken },
         body: JSON.stringify({ image, profile: shown.profile, weather, round }),
-        signal: internal.signal,
+        signal: withRoundTimeout(internal.signal, roundTimeoutMs),
       });
       if (internal.signal.aborted) return finish(stopFromAbort());
       if (response.status === 429) return finish('round_cap');

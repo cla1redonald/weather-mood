@@ -9,8 +9,14 @@ export const MAX_CRITIQUE_ROUNDS = 3;
 /** Largest decoded JPEG the critique route accepts. */
 export const MAX_CRITIQUE_IMAGE_BYTES = 150 * 1024;
 
-/** Wall-clock budget for the whole loop in the browser. */
-export const CRITIQUE_BUDGET_MS = 45_000;
+/**
+ * Wall-clock budget for the whole loop in the browser, a hard stop. Sized for
+ * three rounds at the slow end of what the critic has been measured to take.
+ */
+export const CRITIQUE_BUDGET_MS = 240_000;
+
+/** A single critique request is abandoned after this long. */
+export const CRITIQUE_ROUND_TIMEOUT_MS = 100_000;
 
 /** Screenshot size sent to the critic: 16:9, about 420 image tokens. */
 export const CAPTURE_WIDTH = 768;

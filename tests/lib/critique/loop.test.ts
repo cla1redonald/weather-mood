@@ -144,7 +144,7 @@ describe('runCritiqueLoop stop conditions', () => {
     expect(result.finalProfile).toBe(v0);
   });
 
-  it('stops on the 45 second wall-clock budget, even mid-request', async () => {
+  it('stops on the wall-clock budget, even mid-request', async () => {
     vi.useFakeTimers();
     // Never answers, but rejects on abort the way a real fetch does.
     const hanging = (init: RequestInit) => new Promise<Response>((_, reject) => {
@@ -152,6 +152,8 @@ describe('runCritiqueLoop stop conditions', () => {
     });
     const fetchImpl = scriptedFetch([jsonResponse(reply({ round: 1, total: 14 })), hanging]);
     const opts = options(fetchImpl, {
+      budgetMs: 45_000,
+      roundTimeoutMs: 100_000,
       capture: (signal) => sleep(3_000, signal).then(() => 'data:image/jpeg;base64,AAAA'),
     });
 
@@ -170,6 +172,7 @@ describe('runCritiqueLoop stop conditions', () => {
     let clock = 0;
     const fetchImpl = scriptedFetch([jsonResponse(reply({ round: 1, total: 14 }))]);
     const opts = options(fetchImpl, {
+      budgetMs: 45_000,
       now: () => clock,
       capture: vi.fn(async () => {
         clock += 46_000;
@@ -179,6 +182,31 @@ describe('runCritiqueLoop stop conditions', () => {
 
     const result = await runCritiqueLoop(opts);
     expect(result.stop).toBe('budget');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('abandons a single request after the round timeout and keeps the budget for later rounds', async () => {
+    vi.useFakeTimers();
+    const hanging = (init: RequestInit) => new Promise<Response>((_, reject) => {
+      init.signal?.addEventListener('abort', () => reject(Object.assign(new Error('Aborted'), { name: 'AbortError' })));
+    });
+    const fetchImpl = scriptedFetch([hanging]);
+    const opts = options(fetchImpl, {
+      budgetMs: 240_000,
+      roundTimeoutMs: 5_000,
+      capture: async () => 'data:image/jpeg;base64,AAAA',
+    });
+
+    const pending = runCritiqueLoop(opts);
+    await vi.advanceTimersByTimeAsync(4_000);
+    const early = await Promise.race([pending, Promise.resolve('still running')]);
+    expect(early).toBe('still running');
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    const result = await Promise.race([pending, Promise.resolve('still running')]);
+    expect(result).not.toBe('still running');
+    // A timed-out round ends the loop as an error, not as a spent budget.
+    expect((result as Awaited<typeof pending>).stop).toBe('error');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
