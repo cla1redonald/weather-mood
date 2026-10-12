@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, type MutableRefObject } from 'react';
 import type { WeatherCondition, NormalizedParams } from '@/types/weather';
 import type { VisualProfile } from '@/types/mood';
 import { createRenderer, type CanvasRenderer } from '@/lib/canvas';
@@ -11,9 +11,11 @@ interface WeatherCanvasProps {
   visualProfile?: VisualProfile | null;
   isAudioLoading?: boolean;
   isTransitioning?: boolean;
+  /** Receives the live canvas element, for the critic's screenshots. */
+  captureRef?: MutableRefObject<HTMLCanvasElement | null>;
 }
 
-export default function WeatherCanvas({ condition, params, visualProfile, isAudioLoading, isTransitioning }: WeatherCanvasProps) {
+export default function WeatherCanvas({ condition, params, visualProfile, isAudioLoading, isTransitioning, captureRef }: WeatherCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
 
@@ -56,6 +58,14 @@ export default function WeatherCanvas({ condition, params, visualProfile, isAudi
       renderer.update({ condition, params, visualProfile: visualProfile ?? null });
     }
   }, [condition, params, visualProfile, initRenderer]);
+
+  useEffect(() => {
+    if (!captureRef) return;
+    captureRef.current = canvasRef.current;
+    return () => {
+      captureRef.current = null;
+    };
+  }, [captureRef]);
 
   // Cleanup on unmount
   useEffect(() => {

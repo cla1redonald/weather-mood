@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSystemPrompt, buildUserMessage } from '@/lib/poem/prompt';
+import { buildSystemPrompt, buildUserMessage, buildMoodSystemPrompt, buildMoodUserMessage } from '@/lib/poem/prompt';
 import type { PoemInput } from '@/lib/poem/prompt';
 
 describe('poem prompt', () => {
@@ -92,5 +92,27 @@ describe('poem prompt', () => {
       const message = buildUserMessage(input);
       expect(message).toContain('-15°C');
     });
+  });
+});
+
+describe('mood prompt for structured outputs', () => {
+  const moodInput = {
+    city: 'Lisbon', country: 'Portugal', temperature: 24, condition: 'clear', humidity: 60,
+    windSpeed: 12, cloudCover: 5, weatherCode: 0, windDirection: 300, uvIndex: 6,
+  };
+
+  it('no longer asks for raw JSON, because the schema is enforced by the API', () => {
+    expect(buildMoodSystemPrompt()).not.toMatch(/ONLY (the )?raw JSON/i);
+    expect(buildMoodUserMessage(moodInput)).not.toMatch(/ONLY the JSON/i);
+  });
+
+  it('contains no em dashes, so the worked examples do not teach them', () => {
+    expect(buildMoodSystemPrompt()).not.toContain('\u2014');
+    expect(buildMoodUserMessage(moodInput)).not.toContain('\u2014');
+  });
+
+  it('tells the poet not to use em dashes', () => {
+    expect(buildMoodSystemPrompt()).toMatch(/no em dashes/i);
+    expect(buildSystemPrompt()).toMatch(/em dashes/i);
   });
 });

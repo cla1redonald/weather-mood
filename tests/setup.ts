@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom';
 
-// Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
+// Mock window.matchMedia. Route tests run in the node environment, where
+// there is no window to patch.
+if (typeof window !== 'undefined') Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: (query: string) => ({
     matches: false,
