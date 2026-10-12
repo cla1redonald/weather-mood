@@ -9,7 +9,7 @@
  *
  * A round scores the version currently on screen, so the revision a round
  * produces is only scored by the next one. The loop never ends on a version
- * nobody has scored: at the cap, the final round's patch is not applied, and
+ * nobody has scored: at the cap, the final round's revision is not applied, and
  * if the version on screen scored lower than an earlier one, it rolls back
  * to the best.
  */

@@ -23,8 +23,9 @@ function reply(overrides: Partial<CritiqueResponse> & { total: number | null; ro
     scores: null,
     critique: `critique for round ${overrides.round}`,
     defect: 'a defect',
-    patch: { glowActive: true },
-    changed: ['glowActive'],
+    evidence: 'the upper third is flat grey',
+    adjustments: [{ knob: 'add_glow', amount: 'small' }],
+    changed: ['add_glow'],
     profile: version(overrides.round),
     pixels: { meanLuminance: 90, luminanceStdDev: 20, edgeDensity: 1, poemRegionLuminance: 90 },
     forcedBy: [],
@@ -70,7 +71,7 @@ afterEach(() => vi.useRealTimers());
 
 describe('runCritiqueLoop stop conditions', () => {
   it('stops on accept and leaves the canvas alone', async () => {
-    const fetchImpl = scriptedFetch([jsonResponse(reply({ round: 1, total: 22, verdict: 'accept', changed: [], patch: {} }))]);
+    const fetchImpl = scriptedFetch([jsonResponse(reply({ round: 1, total: 22, verdict: 'accept', changed: [], adjustments: [] }))]);
     const opts = options(fetchImpl);
 
     const result = await runCritiqueLoop(opts);
@@ -129,7 +130,7 @@ describe('runCritiqueLoop stop conditions', () => {
   });
 
   it('stops when the critic asks for a revision but changes nothing', async () => {
-    const fetchImpl = scriptedFetch([jsonResponse(reply({ round: 1, total: 15, changed: [], patch: {} }))]);
+    const fetchImpl = scriptedFetch([jsonResponse(reply({ round: 1, total: 15, changed: [], adjustments: [] }))]);
     const result = await runCritiqueLoop(options(fetchImpl));
     expect(result.stop).toBe('stalled');
     expect(fetchImpl).toHaveBeenCalledTimes(1);

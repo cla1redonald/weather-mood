@@ -67,12 +67,14 @@ const VOICE_PERFORMANCE_SETTINGS: Record<string, {
 const DEFAULT_PERFORMANCE_SETTINGS = { stability: 0.40, similarity_boost: 0.75, style: 0.70, speed: 0.82 };
 
 // Languages supported by ElevenLabs `eleven_multilingual_v2`.
-// Out-of-list languages (e.g. Afrikaans 'af') cause a 4xx upstream; we skip narration for them.
+// Out-of-list languages (e.g. Afrikaans 'af') cause a 4xx upstream, so they get
+// the English poem instead. Norwegian ('no') is not on the list: production
+// returned "does not support language_code 'no'".
 const SUPPORTED_LANGUAGES = new Set([
   'en', 'ja', 'zh', 'de', 'hi', 'fr', 'ko', 'pt', 'it', 'es',
   'id', 'nl', 'tr', 'fil', 'tl', 'pl', 'sv', 'bg', 'ro', 'ar',
   'cs', 'el', 'fi', 'hr', 'ms', 'sk', 'da', 'ta', 'uk', 'ru',
-  'hu', 'no', 'vi',
+  'hu', 'vi',
 ]);
 
 interface NarrateInput {

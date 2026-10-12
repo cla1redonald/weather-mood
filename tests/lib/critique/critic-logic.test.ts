@@ -1,14 +1,14 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { computeVerdict, normaliseScores } from '@/lib/critique/verdict';
-import { applyPatch, changedFields, mergePatches, pixelFixPatch } from '@/lib/critique/patch';
+import { applyPixelFixes, pixelFixPatch } from '@/lib/critique/patch';
 import { analysePixels } from '@/lib/critique/pixels';
 import { decodeCritiqueImage } from '@/lib/critique/image';
 import { buildFallbackProfile } from '@/lib/mood/fallback';
 import { encode } from 'jpeg-js';
 
 const scores = (values: [number, number, number, number, number]) => {
-  const [palette, density, poemContrast, focalPoint, cityFlavour] = values.map((score) => ({ score, evidence: 'seen' }));
+  const [palette, density, poemContrast, focalPoint, cityFlavour] = values;
   return { palette, density, poemContrast, focalPoint, cityFlavour };
 };
 
@@ -24,43 +24,23 @@ describe('verdict', () => {
 
   it('clamps out-of-range and non-numeric scores rather than trusting them', () => {
     const rubric = normaliseScores(scores([7.6, 0, Number.NaN, 3.4, 4.5]));
-    expect(rubric.scores.palette.score).toBe(5);
-    expect(rubric.scores.density.score).toBe(1);
-    expect(rubric.scores.poemContrast.score).toBe(1);
-    expect(rubric.scores.focalPoint.score).toBe(3);
-    expect(rubric.scores.cityFlavour.score).toBe(5);
+    expect(rubric.scores.palette).toBe(5);
+    expect(rubric.scores.density).toBe(1);
+    expect(rubric.scores.poemContrast).toBe(1);
+    expect(rubric.scores.focalPoint).toBe(3);
+    expect(rubric.scores.cityFlavour).toBe(5);
     expect(rubric.total).toBe(15);
     expect(rubric.lowest).toBe(1);
   });
 });
 
-describe('patches', () => {
+describe('pixel fixes', () => {
   const profile = buildFallbackProfile('clear').visual;
-
-  it('changes only the patched fields and clamps them', () => {
-    const next = applyPatch(profile, { spawnRate: 80, direction: 'up' });
-    expect(next.particles.spawnRate).toBe(40);
-    expect(next.particles.direction).toBe('up');
-    expect(next.background).toEqual(profile.background);
-    expect(next.effects).toEqual(profile.effects);
-  });
-
-  it('does not mutate the profile it was given', () => {
-    const before = structuredClone(profile);
-    applyPatch(profile, { topColor: [1, 2, 3] });
-    expect(profile).toEqual(before);
-  });
-
-  it('lets the model win where both set a field, and pixel fixes fill the rest', () => {
-    const merged = mergePatches({ topColor: [10, 20, 30] }, { topColor: [90, 90, 90], bottomColor: [120, 120, 120] });
-    expect(merged).toEqual({ topColor: [10, 20, 30], bottomColor: [120, 120, 120] });
-    expect(changedFields(merged).sort()).toEqual(['bottomColor', 'topColor']);
+  const report = (failures: Array<'blank' | 'too_dark' | 'washed_out' | 'cluttered'>) => ({
+    meanLuminance: 0, luminanceStdDev: 0, edgeDensity: 0, poemRegionLuminance: 0, failures,
   });
 
   it('builds a visible fix for each pixel failure', () => {
-    const report = (failures: Array<'blank' | 'too_dark' | 'washed_out' | 'cluttered'>) => ({
-      meanLuminance: 0, luminanceStdDev: 0, edgeDensity: 0, poemRegionLuminance: 0, failures,
-    });
     const dark = pixelFixPatch(report(['too_dark']), profile);
     expect(Math.min(...dark.bottomColor!)).toBeGreaterThanOrEqual(70);
 
@@ -71,6 +51,24 @@ describe('patches', () => {
     expect(busy.particleCount).toBeLessThan(profile.particles.maxCount);
 
     expect(pixelFixPatch(report([]), profile)).toEqual({});
+  });
+
+  it('applies the fix through the clamp and reports it as a knob name', () => {
+    const black = structuredClone(profile);
+    black.background = { topColor: [0, 0, 0], bottomColor: [0, 0, 0], style: 'linear' };
+    const fixed = applyPixelFixes(black, report(['blank', 'too_dark']));
+    expect(fixed.knobs).toEqual(['lighter']);
+    expect(Math.min(...fixed.profile.background.topColor)).toBeGreaterThanOrEqual(40);
+    expect(Math.min(...fixed.profile.background.bottomColor)).toBeGreaterThanOrEqual(70);
+
+    expect(applyPixelFixes(profile, report(['washed_out', 'cluttered'])).knobs).toEqual(['darker', 'fewer_particles']);
+    expect(applyPixelFixes(profile, report([]))).toEqual({ profile, knobs: [] });
+  });
+
+  it('does not mutate the profile it was given', () => {
+    const before = structuredClone(profile);
+    applyPixelFixes(profile, report(['too_dark', 'cluttered']));
+    expect(profile).toEqual(before);
   });
 });
 

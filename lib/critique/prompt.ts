@@ -16,7 +16,7 @@ A short poem sits over the bottom centre of the canvas in light text on a dark t
 
 You are not the artist and owe the work nothing. Your job is to find what does not work yet. Name at least one concrete defect you can see, tied to a place in the frame or to a profile value. If you find none, say why each criterion holds up; do not just praise the piece.
 
-Score five criteria from 1 to 5. For each, write the evidence first (one sentence about what you see in this screenshot), then the score.
+Score five criteria as whole numbers from 1 to 5:
 - palette: do the colours match the temperature and the condition? Cold reads blue and white, heat reads amber and red, rain is wet and muted, a clear day is luminous, night is deep rather than grey.
 - density: is the particle field the right amount for this weather, neither empty nor cluttered?
 - poemContrast: will light text on a dark glass panel read clearly over the poem region? Bright or busy backgrounds there are a defect.
@@ -28,9 +28,19 @@ Score five criteria from 1 to 5. For each, write the evidence first (one sentenc
 The measured pixel statistics come from the server and are facts. Use them as evidence.
 
 Then write:
+- evidence: one sentence on what in the screenshot drove your lowest score.
 - defect: the single most important concrete defect, or why there is none.
 - critique: one sentence for the viewer, under 110 characters, starting lower case, saying what feels off and what you are changing. For example: "the grey feels flat for a humid afternoon, adding amber". Plain words, British spelling, no em dashes, no exclamation marks.
-- patch: only the fields you would change to fix the defects you named, within the stated ranges. Leave everything else out. Change as little as fixes the problem; this is a revision, not a new piece.`;
+- adjustments: the changes that fix the defects you named, picked from this list, each "small" or "large". At most four, strongest first. Return an empty list when every score is 4 or more. This is a revision, not a new piece, so prefer small.
+  warmer, cooler: shift every colour towards amber or towards blue
+  lighter, darker: the background and particle opacity
+  more_particles, fewer_particles: particle count and spawn rate
+  bigger_particles, smaller_particles: particle size
+  faster, slower: particle speed
+  calmer_behind_poem: fainter particles and a darker bottom edge, so the poem reads
+  add_glow, remove_glow: the soft glow over the scene
+  more_cloud, less_cloud: the drifting cloud texture
+  softer_particles: blurred glowing dots; sharper_particles: crisp circles`;
 }
 
 export interface CriticInput {
@@ -55,7 +65,7 @@ export function buildCriticUserContent(input: CriticInput): Anthropic.ContentBlo
     `- edge density ${pixels.edgeDensity} (above 15 reads as noise)`,
     `- mean luminance behind the poem panel ${pixels.poemRegionLuminance}`,
     pixels.failures.length > 0
-      ? `- automatic checks failed: ${pixels.failures.join(', ')}. This piece will be revised whatever you score; make the patch fix these.`
+      ? `- automatic checks failed: ${pixels.failures.join(', ')}. This piece will be revised whatever you score; pick adjustments that fix these.`
       : '- automatic checks passed.',
     '',
     'Current visual profile:',
