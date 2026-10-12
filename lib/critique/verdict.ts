@@ -9,7 +9,7 @@ import type { PixelFailure } from '@/lib/critique/pixels';
 export type Verdict = 'accept' | 'revise';
 
 export interface ScoredRubric {
-  scores: Record<RubricCriterion, { score: number; evidence: string }>;
+  scores: Record<RubricCriterion, number>;
   /** Sum of the five scores, 5 to 25. Used to pick the best version. */
   total: number;
   lowest: number;
@@ -21,9 +21,9 @@ export function normaliseScores(raw: CritiqueOutput['scores']): ScoredRubric {
   let total = 0;
   let lowest = 5;
   for (const key of RUBRIC_CRITERIA) {
-    const value = Number(raw[key]?.score);
+    const value = Number(raw?.[key]);
     const score = Number.isFinite(value) ? Math.min(5, Math.max(1, Math.round(value))) : 1;
-    scores[key] = { score, evidence: String(raw[key]?.evidence ?? '').trim() };
+    scores[key] = score;
     total += score;
     lowest = Math.min(lowest, score);
   }

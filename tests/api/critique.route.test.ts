@@ -6,7 +6,7 @@ import { resetMemorySpend } from '@/lib/spend-cap';
 import { buildFallbackProfile } from '@/lib/mood/fallback';
 import type { CritiqueResponse } from '@/lib/critique/types';
 import { frameCase, frameToDataUrl } from '../../evals/critic-bad-frames/frames';
-import { stubAnthropic } from '../helpers/anthropic-stub';
+import { criticReplyText, stubAnthropic } from '../helpers/anthropic-stub';
 
 vi.mock('@/lib/claude/client', () => ({ createAnthropicClient: vi.fn() }));
 
@@ -39,25 +39,14 @@ function critiqueRequest(options: { token?: string | null; image?: string; round
 }
 
 function rubric(score: number, overrides: Record<string, number> = {}) {
-  const criterion = (name: string) => ({
-    evidence: `The ${name} is what it is in this frame.`,
-    score: overrides[name] ?? score,
-  });
-  return {
-    palette: criterion('palette'),
-    density: criterion('density'),
-    poemContrast: criterion('poemContrast'),
-    focalPoint: criterion('focalPoint'),
-    cityFlavour: criterion('cityFlavour'),
-  };
+  return { score, scores: overrides };
 }
 
-function criticReply(scores: ReturnType<typeof rubric>, patch: Record<string, unknown> = {}) {
-  return JSON.stringify({
-    scores,
-    defect: 'The upper third is a flat slate grey with nothing to hold the eye.',
+function criticReply(scores: ReturnType<typeof rubric>, adjustments: Array<{ knob: string; amount: string }> = []) {
+  return criticReplyText({
+    ...scores,
     critique: 'the grey feels flat for a humid afternoon — adding amber',
-    patch,
+    adjustments,
   });
 }
 
@@ -141,35 +130,65 @@ describe('POST /api/critique', () => {
     expect(stub.fetch).not.toHaveBeenCalled();
   });
 
-  it('accepts when every score is 4 or more, and ignores any patch the model offered', async () => {
-    const stub = stubAnthropic([{ text: criticReply(rubric(4, { palette: 5 }), { particleCount: 50 }) }]);
+  it('accepts when every score is 4 or more, and ignores any adjustment the model offered', async () => {
+    const stub = stubAnthropic([{ text: criticReply(rubric(4, { palette: 5 }), [{ knob: 'fewer_particles', amount: 'large' }]) }]);
     vi.mocked(createAnthropicClient).mockReturnValue(stub.client);
 
     const response = await POST(critiqueRequest({ token: issueVisitToken()! }));
     const data = (await response.json()) as CritiqueResponse;
     expect(data.verdict).toBe('accept');
     expect(data.total).toBe(21);
-    expect(data.patch).toEqual({});
+    expect(data.adjustments).toEqual([]);
+    expect(data.changed).toEqual([]);
     expect(data.profile).toEqual(profile);
   });
 
-  it('revises when any score is below 4, applying the patch through clampVisualProfile', async () => {
-    const patch = { topColor: [300, -5, 120], particleCount: 999, glowActive: true, glowColor: [240, 170, 90] };
-    const stub = stubAnthropic([{ text: criticReply(rubric(5, { palette: 2 }), patch) }]);
+  it('revises when any score is below 4, applying the named adjustments in code', async () => {
+    const adjustments = [
+      { knob: 'warmer', amount: 'large' },
+      { knob: 'add_glow', amount: 'small' },
+      { knob: 'fewer_particles', amount: 'small' },
+    ];
+    const stub = stubAnthropic([{ text: criticReply(rubric(5, { palette: 2 }), adjustments) }]);
     vi.mocked(createAnthropicClient).mockReturnValue(stub.client);
 
     const response = await POST(critiqueRequest({ token: issueVisitToken()! }));
     const data = (await response.json()) as CritiqueResponse;
 
     expect(data.verdict).toBe('revise');
-    expect(data.scores?.palette.score).toBe(2);
-    expect(data.changed).toEqual(expect.arrayContaining(['topColor', 'particleCount', 'glowActive', 'glowColor']));
-    expect(data.profile.background.topColor).toEqual([255, 0, 120]);
-    expect(data.profile.particles.maxCount).toBe(400);
-    expect(data.profile.effects.glow).toMatchObject({ active: true, color: [240, 170, 90] });
+    expect(data.scores?.palette).toBe(2);
+    expect(data.evidence).toMatch(/flat slate grey/);
+    expect(data.changed).toEqual(['warmer', 'add_glow', 'fewer_particles']);
+    expect(data.adjustments).toEqual(adjustments);
+    const [r, g, b] = data.profile.background.topColor;
+    const [r0, g0, b0] = profile.background.topColor;
+    expect(r).toBeGreaterThan(r0);
+    expect(g).toBeGreaterThan(g0);
+    expect(b).toBeLessThan(b0);
+    expect(data.profile.effects.glow.active).toBe(true);
+    expect(data.profile.particles.maxCount).toBeLessThan(profile.particles.maxCount);
     // Untouched fields carry over from the submitted profile.
-    expect(data.profile.background.bottomColor).toEqual(profile.background.bottomColor);
     expect(data.profile.particles.drawStyle).toBe(profile.particles.drawStyle);
+    expect(data.profile.particles.speedRange).toEqual(profile.particles.speedRange);
+  });
+
+  it('drops unknown knobs, duplicates and contradictions, and keeps at most four', async () => {
+    const adjustments = [
+      { knob: 'repaint_everything', amount: 'large' },
+      { knob: 'cooler', amount: 'small' },
+      { knob: 'warmer', amount: 'large' },
+      { knob: 'cooler', amount: 'large' },
+      { knob: 'slower', amount: 'small' },
+      { knob: 'more_particles', amount: 'enormous' },
+      { knob: 'bigger_particles', amount: 'small' },
+      { knob: 'more_cloud', amount: 'small' },
+    ];
+    const stub = stubAnthropic([{ text: criticReply(rubric(3), adjustments) }]);
+    vi.mocked(createAnthropicClient).mockReturnValue(stub.client);
+
+    const data = (await (await POST(critiqueRequest({ token: issueVisitToken()! }))).json()) as CritiqueResponse;
+    expect(data.changed).toEqual(['cooler', 'slower', 'more_particles', 'bigger_particles']);
+    expect(data.adjustments[2]).toEqual({ knob: 'more_particles', amount: 'small' });
   });
 
   it('tidies the viewer sentence: no em dashes reach the ticker', async () => {
@@ -187,7 +206,8 @@ describe('POST /api/critique', () => {
     const data = (await (await POST(critiqueRequest({ token: issueVisitToken()!, image: blackFrame }))).json()) as CritiqueResponse;
     expect(data.verdict).toBe('revise');
     expect(data.forcedBy).toEqual(expect.arrayContaining(['blank', 'too_dark']));
-    expect(data.changed).toEqual(expect.arrayContaining(['topColor', 'bottomColor']));
+    expect(data.changed).toContain('lighter');
+    expect(Math.min(...data.profile.background.bottomColor)).toBeGreaterThanOrEqual(70);
     expect(data.pixels.meanLuminance).toBeLessThan(14);
   });
 
@@ -201,6 +221,8 @@ describe('POST /api/critique', () => {
     expect(response.status).toBe(200);
     expect(data.source).toBe('pixels_only');
     expect(data.verdict).toBe('revise');
+    expect(data.changed).toEqual(['lighter']);
+    expect(data.profile.background.topColor).not.toEqual(profile.background.topColor);
     quiet.mockRestore();
   });
 
@@ -231,6 +253,7 @@ describe('POST /api/critique', () => {
     expect(sent.model).toBe('claude-haiku-5-5');
     expect(sent.output_config.format.type).toBe('json_schema');
     expect(Object.keys(sent.output_config.format.schema.properties)).not.toContain('verdict');
+    expect(Object.keys(sent.output_config.format.schema.properties)).toContain('adjustments');
     expect(sent.system).toMatch(/another artist/);
     expect(sent.system).toMatch(/at least one concrete defect/);
     const [image, text] = sent.messages[0].content;

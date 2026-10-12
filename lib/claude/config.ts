@@ -2,9 +2,12 @@
  * Every Claude model id and call setting lives here, so a model change is a
  * one-line edit or an environment variable, never a search through routes.
  *
- * The director is Claude Sonnet 5.5. The critic is Claude Haiku 5.5: measured on
- * production on 12 Oct 2026, Sonnet 5.5 at low effort took 62 to 94 seconds per
- * critique with a 768 by 432 image, which no viewer will wait three rounds for.
+ * The director is Claude Sonnet 5.5. The critic is Claude Haiku 5.5. It was moved
+ * off Sonnet 5.5 after production critiques took 62 to 94 seconds, but that time
+ * matches the API refusing the old critic schema as too complex after about a
+ * minute, on both models. With the current schema, scripts/probe-critique-schema.mts
+ * measured one critique (768 by 432 image, low effort) at 6.8 and 8.7 seconds on
+ * Haiku 5.5 and 4.3 seconds on Sonnet 5.5, on 12 Oct 2026.
  * Any override must support structured outputs (`output_config.format`) and
  * `output_config.effort`; Claude Haiku 4.5, for example, has no effort parameter
  * and would be rejected with a 400.

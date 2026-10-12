@@ -67,3 +67,28 @@ export function stubAnthropic(replies: StubReply[]): AnthropicStub {
 
   return { client, requests, fetch: fetchStub };
 }
+
+export interface CriticReplyFields {
+  scores?: Partial<Record<'palette' | 'density' | 'poemContrast' | 'focalPoint' | 'cityFlavour', number>>;
+  /** Score for every criterion not set in `scores`. */
+  score?: number;
+  evidence?: string;
+  defect?: string;
+  critique?: string;
+  adjustments?: Array<{ knob: string; amount: string }>;
+}
+
+/** The JSON text of a critic reply in the shape CritiqueSchema expects. */
+export function criticReplyText(fields: CriticReplyFields = {}): string {
+  const base = fields.score ?? 3;
+  const scores = Object.fromEntries(
+    (['palette', 'density', 'poemContrast', 'focalPoint', 'cityFlavour'] as const).map((k) => [k, fields.scores?.[k] ?? base]),
+  );
+  return JSON.stringify({
+    scores,
+    evidence: fields.evidence ?? 'The upper third is a flat slate grey band.',
+    defect: fields.defect ?? 'The upper third is a flat slate grey with nothing to hold the eye.',
+    critique: fields.critique ?? 'the grey feels flat for a humid afternoon, adding amber',
+    adjustments: fields.adjustments ?? [],
+  });
+}

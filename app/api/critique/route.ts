@@ -1,6 +1,7 @@
 /**
  * POST /api/critique: Claude looks at a screenshot of the canvas it designed,
- * scores it against the weather, and proposes a patch.
+ * scores it against the weather, and names up to four adjustments from a
+ * fixed list, which the server turns into profile changes.
  *
  * Order matters, and every step before the model call can refuse:
  *   1. visit token (401; an expired token is refused whatever its counter says)
@@ -30,7 +31,7 @@ import { requestStructured } from '@/lib/claude/structured';
 import { CritiqueSchema } from '@/lib/critique/schema';
 import { decodeCritiqueImage } from '@/lib/critique/image';
 import { analysePixels, type PixelFailure, type PixelReport } from '@/lib/critique/pixels';
-import { applyPatch, changedFields, mergePatches, pixelFixPatch } from '@/lib/critique/patch';
+import { adjustProfile, applyPixelFixes, changedFields } from '@/lib/critique/patch';
 import { computeVerdict, normaliseScores } from '@/lib/critique/verdict';
 import { buildCriticSystemPrompt, buildCriticUserContent } from '@/lib/critique/prompt';
 import { MAX_CRITIQUE_IMAGE_BYTES, MAX_CRITIQUE_ROUNDS } from '@/lib/critique/limits';
@@ -146,7 +147,6 @@ export async function POST(request: NextRequest) {
 
   const current = clampVisualProfile(rawProfile as Partial<VisualProfile>);
   const pixels = analysePixels(decoded.rgba, decoded.width, decoded.height);
-  const pixelPatch = pixelFixPatch(pixels, current);
 
   let outcome;
   try {
@@ -171,17 +171,19 @@ export async function POST(request: NextRequest) {
     // The pixel checks still stand on their own: a black frame gets fixed
     // even if the model refused or the call failed.
     if (pixels.failures.length > 0) {
+      const fixed = applyPixelFixes(current, pixels);
       const response: CritiqueResponse = {
         round: claim.round,
         maxRounds: MAX_CRITIQUE_ROUNDS,
         verdict: 'revise',
         scores: null,
         total: null,
+        evidence: '',
         critique: PIXEL_FAILURE_TEXT[pixels.failures[0]],
         defect: `Automatic checks failed: ${pixels.failures.join(', ')}.`,
-        patch: pixelPatch,
-        changed: changedFields(pixelPatch),
-        profile: applyPatch(current, pixelPatch),
+        adjustments: [],
+        changed: fixed.knobs,
+        profile: fixed.profile,
         pixels: publicPixels(pixels),
         forcedBy: pixels.failures,
         source: 'pixels_only',
@@ -196,9 +198,19 @@ export async function POST(request: NextRequest) {
 
   const rubric = normaliseScores(outcome.data.scores);
   const verdict = computeVerdict(rubric, pixels.failures);
-  const patch = verdict === 'revise'
-    ? mergePatches(outcome.data.patch, pixels.failures.length > 0 ? pixelPatch : {})
-    : {};
+
+  // On accept nothing changes, whatever the model suggested. On revise the
+  // model's adjustments go first and the pixel fixes, if any, on top.
+  let next = current;
+  let adjustments: CritiqueResponse['adjustments'] = [];
+  let changed: CritiqueResponse['changed'] = [];
+  if (verdict === 'revise') {
+    const adjusted = adjustProfile(current, outcome.data.adjustments);
+    const fixed = applyPixelFixes(adjusted.profile, pixels);
+    next = fixed.profile;
+    adjustments = adjusted.applied;
+    changed = Array.from(new Set([...changedFields(adjusted.applied), ...fixed.knobs]));
+  }
 
   const response: CritiqueResponse = {
     round: claim.round,
@@ -206,11 +218,12 @@ export async function POST(request: NextRequest) {
     verdict,
     scores: rubric.scores,
     total: rubric.total,
+    evidence: tidySentence(outcome.data.evidence),
     critique: tidySentence(outcome.data.critique),
     defect: tidySentence(outcome.data.defect),
-    patch,
-    changed: changedFields(patch),
-    profile: verdict === 'revise' ? applyPatch(current, patch) : current,
+    adjustments,
+    changed,
+    profile: next,
     pixels: publicPixels(pixels),
     forcedBy: pixels.failures,
     source: 'model',

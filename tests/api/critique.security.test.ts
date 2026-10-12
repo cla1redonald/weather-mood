@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildFallbackProfile } from '@/lib/mood/fallback';
 import { MAX_CRITIQUE_IMAGE_BYTES } from '@/lib/critique/limits';
 import { frameCase, frameToDataUrl } from '../../evals/critic-bad-frames/frames';
-import { stubAnthropic, type StubReply } from '../helpers/anthropic-stub';
+import { criticReplyText, stubAnthropic, type StubReply } from '../helpers/anthropic-stub';
 
 vi.mock('@/lib/claude/client', () => ({ createAnthropicClient: vi.fn() }));
 
@@ -19,13 +19,11 @@ const weather = {
   windSpeed: 22, cloudCover: 95, weatherCode: 3, windDirection: 250, uvIndex: 1,
 };
 
-const criticText = JSON.stringify({
-  scores: Object.fromEntries(
-    ['palette', 'density', 'poemContrast', 'focalPoint', 'cityFlavour'].map((k) => [k, { evidence: 'seen', score: 3 }]),
-  ),
+const criticText = criticReplyText({
+  score: 3,
   defect: 'The sky is one flat slate band.',
   critique: 'the slate sky is flat, adding a warm lamplight glow',
-  patch: { glowActive: true },
+  adjustments: [{ knob: 'add_glow', amount: 'small' }],
 });
 
 function replies(count: number): StubReply[] {

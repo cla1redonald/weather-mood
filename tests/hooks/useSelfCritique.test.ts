@@ -19,8 +19,9 @@ function critique(round: number, overrides: Partial<CritiqueResponse> = {}): Cri
     total: 12 + round,
     critique: `the grey is flat in round ${round}, adding amber`,
     defect: 'flat grey',
-    patch: { glowActive: true },
-    changed: ['glowActive'],
+    evidence: 'the upper third is flat grey',
+    adjustments: [{ knob: 'add_glow', amount: 'small' }],
+    changed: ['add_glow'],
     profile: { ...structuredClone(draft), description: `revision ${round}` },
     pixels: { meanLuminance: 110, luminanceStdDev: 18, edgeDensity: 1, poemRegionLuminance: 120 },
     forcedBy: [],
@@ -153,7 +154,7 @@ describe('useSelfCritique', () => {
   });
 
   it('stops on accept with a note', async () => {
-    fetchStub.mockResolvedValueOnce(okJson(critique(1, { verdict: 'accept', total: 22, changed: [], patch: {} })));
+    fetchStub.mockResolvedValueOnce(okJson(critique(1, { verdict: 'accept', total: 22, changed: [], adjustments: [] })));
     const { result } = renderHook(() => useSelfCritique(vi.fn(), { capture }));
 
     act(() => result.current.start(startArgs()));

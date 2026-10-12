@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { costCents, liveCases, runLiveEval, runOfflineEval } from './evaluate';
 import { FRAME_CASES } from './frames';
-import { stubAnthropic } from '../../tests/helpers/anthropic-stub';
+import { criticReplyText, stubAnthropic } from '../../tests/helpers/anthropic-stub';
 
 describe('critic bad frames, offline', () => {
   const results = runOfflineEval();
@@ -28,11 +28,8 @@ describe('critic bad frames, offline', () => {
 
 describe('critic bad frames, live path with a stubbed client', () => {
   it('computes verdicts from scores and pixel checks, and prices the usage', async () => {
-    const scores = (n: number) => Object.fromEntries(
-      ['palette', 'density', 'poemContrast', 'focalPoint', 'cityFlavour'].map((k) => [k, { evidence: 'seen', score: n }]),
-    );
     const reply = (n: number) => ({
-      text: JSON.stringify({ scores: scores(n), defect: 'none', critique: 'fine as it is', patch: {} }),
+      text: criticReplyText({ score: n, defect: 'none', critique: 'fine as it is' }),
       usage: { input_tokens: 3400, output_tokens: 1000 },
     });
     // The model likes everything: only the pixel checks can catch the bad frames.
