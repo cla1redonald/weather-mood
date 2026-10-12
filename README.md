@@ -43,7 +43,7 @@ Each round scores the version on screen, so the loop never ends on a revision no
 
 A visit makes one Claude call to design the piece, up to three Claude calls to critique it, and three ElevenLabs calls for the audio.
 
-**What a visit costs.** On Claude Sonnet 5.5 ($2 / $10 per million input / output tokens) the director call is about 3 cents and each critic round about 1.7 cents (a 768 by 432 screenshot is about 420 input tokens), so about 8 cents of Claude per visit with all three rounds. ElevenLabs comes on top and is still the larger share. The spend cap reserves rounded-up figures: 4 cents for the director, 2 cents per critique round, 8 for music, 2 for ambience and 3 for narration, 23 cents for a full visit.
+**What a visit costs.** The director runs on Claude Sonnet 5.5 ($2 / $10 per million input / output tokens) and costs about 3 cents a visit. The critic runs on Claude Haiku 5.5 ($0.10 / $0.50) and costs well under a cent a round (a 768 by 432 screenshot is about 420 input tokens), so about 4 cents of Claude per visit with all three rounds. ElevenLabs comes on top and is still the larger share. The spend cap reserves rounded-up figures: 4 cents for the director, 2 cents per critique round, 8 for music, 2 for ambience and 3 for narration, 23 cents for a full visit.
 
 Five controls keep a public deployment bounded:
 
@@ -61,7 +61,7 @@ Set a hard spend limit at the provider as well (Anthropic console, ElevenLabs pl
 
 - **Framework:** Next.js 14 (App Router), TypeScript in strict mode, Tailwind CSS
 - **Rendering:** Canvas 2D with simplex-noise
-- **Claude:** `@anthropic-ai/sdk` with `messages.parse` and zod schemas (structured outputs). Two roles, both Claude Sonnet 5.5 by default and set in `lib/claude/config.ts`: the director writes the poem and designs the scene, voice and score directions; the critic reviews screenshots. Override with `WEATHER_MOOD_DIRECTOR_MODEL` and `WEATHER_MOOD_CRITIC_MODEL`.
+- **Claude:** `@anthropic-ai/sdk` with `messages.parse` and zod schemas (structured outputs). Two roles, set in `lib/claude/config.ts`: the director (Claude Sonnet 5.5) writes the poem and designs the scene, voice and score directions; the critic (Claude Haiku 5.5) reviews screenshots. The critic was Sonnet 5.5 until a production measurement showed 62 to 94 seconds a round, which no viewer waits three times for. Override with `WEATHER_MOOD_DIRECTOR_MODEL` and `WEATHER_MOOD_CRITIC_MODEL`.
 - **Audio:** ElevenLabs REST API via `lib/elevenlabs/client.ts` for narration, music and ambience. There is no in-browser synthesiser; an earlier Web Audio synth was removed.
 - **Weather:** Open-Meteo weather and geocoding (no key needed)
 - **Screenshot checks:** `jpeg-js` decodes the critic's JPEG on the server for the pixel checks
