@@ -31,7 +31,7 @@ It backs its lowest score with one sentence of evidence and writes one sentence 
 
 Claude doesn't get to decide whether its own work passes. The code accepts a piece only when every score is 4 or higher. Separate pixel checks on the screenshot look for a blank frame, a frame too dark or too washed out to read, and a frame that has turned to noise, and any one of those forces a revision whatever Claude scored. Nor does Claude write any setting directly. The server turns each named change into numbers in code (`lib/critique/patch.ts`) and clamps every result to the ranges the renderer can safely draw.
 
-Each round scores what is on screen, so a revision only gets its score in the round after it. That is why the last round's suggestions are never drawn, since nothing would be left to score them. When the loop stops, the page keeps the best-scoring version and goes back to it if the one on screen scored lower.
+Each round scores what is on screen, so a revision only gets its score in the round after it. So the last round's suggestions are never drawn, because nothing would be left to score them. When the loop stops, the page keeps the best-scoring version and goes back to it if the one on screen scored lower.
 
 ## What is tested
 
@@ -45,7 +45,7 @@ There are 377 tests in 28 files. CI runs all of them on every pull request, and 
 | Canvas and weather | 128 | Weather classification and its edge cases, normalisation, palettes, particles, and the weather pipeline end to end |
 | Interface | 40 | City search, mute, the poem overlay and the weather panel |
 
-The critic has its own eval set as well. `evals/critic-bad-frames/` holds eight synthetic frames, each with the verdict it should get. Four are broken on purpose (blank, all black, white on white, and over-dense clutter), one is a good frame, and three are legitimate scenes that must not be flagged, namely a dark storm, a bright snowfall and the renderer at its particle limit. Offline, the pixel checks get 8 of 8 right. Claude's own verdicts on the five frames that have an expected verdict haven't been measured yet, because nobody has run `npm run eval:critic -- --live` (about 9 cents).
+The critic has its own eval set as well. `evals/critic-bad-frames/` holds eight synthetic frames, each with the verdict it should get. Four are broken on purpose (blank, all black, white on white, and over-dense clutter), one is a good frame, and three are legitimate scenes that must not be flagged (a dark storm, a bright snowfall and the renderer at its particle limit). Offline, the pixel checks get 8 of 8 right. Claude's own verdicts on the five frames that have an expected verdict haven't been measured yet, because nobody has run `npm run eval:critic -- --live` (about 9 cents).
 
 ## Cost controls
 
@@ -55,7 +55,7 @@ The director runs on Claude Sonnet 5.5, at $2 per million input tokens and $10 p
 
 The spend cap doesn't use the measured figures. It reserves rounded-up ones instead, 4 cents for the director, 2 cents per critique round, 8 for music, 2 for ambience and 3 for narration, which makes 23 cents for a full visit.
 
-Five controls stop a public deployment from running up a large bill.
+Five controls put a ceiling on what a public deployment can spend.
 
 - `/api/mood` hands out a short-lived signed visit token, and the music, sfx, narrate and critique routes refuse any request without one (401). A token is good for one call to each audio route (a replay gets 409) and three critique rounds (a fourth gets 429), and the server does the counting. Nobody can reach a paid route without going through a mood generation first, so none of them can be used as an open proxy. Set `VISIT_TOKEN_SECRET` in production. Without it those routes return 503 rather than run unprotected.
 - Each IP address can make 4 mood generations per 10 minutes and 12 per day. For `/api/critique` the limits are 12 per 10 minutes and 36 per day, so one address can spend at most 72 cents a day on critiques.
@@ -63,7 +63,7 @@ Five controls stop a public deployment from running up a large bill.
 - Before it calls upstream, each paid route reserves its estimated cost against a daily total. Once the total passes `WEATHER_MOOD_DAILY_CAP_CENTS` (default 1000, which is $10 or about 43 full visits), paid routes return 503 and the page falls back to silence and visuals drawn from the weather data.
 - With `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` set, the limits, grants, critique rounds and cap are shared across serverless instances. Without them each instance keeps its own counters, which is a much weaker bound, and the logs say so. If Upstash is configured but can't be reached, critique rounds are refused rather than counted per instance.
 
-Set a hard spend limit with each provider as well, in the Anthropic console and on your ElevenLabs plan. The controls above keep a bad day cheaper, but they can't replace a cap that the provider enforces.
+Set a hard spend limit with each provider as well, in the Anthropic console and on your ElevenLabs plan. The controls above limit how much a bad day can cost, but they are no substitute for a cap the provider enforces.
 
 ## For developers
 
@@ -72,7 +72,7 @@ Set a hard spend limit with each provider as well, in the Anthropic console and 
 - Next.js 14 with the App Router, TypeScript in strict mode, and Tailwind CSS
 - Canvas 2D for drawing, with simplex-noise
 - Claude through `@anthropic-ai/sdk`, using `messages.parse` with zod schemas for structured outputs
-- ElevenLabs for narration, music and ambience, called over its REST API from `lib/elevenlabs/client.ts`. There is no synthesiser in the browser any more, since an earlier Web Audio synth was removed.
+- ElevenLabs for narration, music and ambience, called over its REST API from `lib/elevenlabs/client.ts`. An earlier Web Audio synth in the browser has been removed, so all the sound comes from ElevenLabs.
 - Open-Meteo for weather and geocoding, which needs no key
 - `jpeg-js` to decode the critic's JPEG on the server for the pixel checks
 - Vitest and React Testing Library for tests
