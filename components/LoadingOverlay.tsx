@@ -92,7 +92,7 @@ export default function LoadingOverlay({ cityName, isVisible }: LoadingOverlayPr
           letterSpacing: '0.25em',
         }}
       >
-        Creating your experience
+        Reading the weather
       </p>
     </div>
   );
