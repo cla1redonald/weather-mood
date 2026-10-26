@@ -1,6 +1,6 @@
 # Critic bad frames
 
-Synthetic 768 by 432 frames with known defects, used to check that the critic sends broken work back for revision.
+These synthetic 768 by 432 frames check that the critic sends broken work back for revision. Four have a known defect, one is a good frame, and three are legitimate scenes that sit close to the edges the checks look for.
 
 | Frame | What it is | Pixel checks | Full critic |
 |---|---|---|---|
@@ -13,9 +13,9 @@ Synthetic 768 by 432 frames with known defects, used to check that the critic se
 | `control-snow` | Legitimate bright snowfall | pass | no fixed expectation |
 | `control-max-particles` | The renderer's 400-particle limit | pass | no fixed expectation |
 
-The controls exist to catch false positives: a real storm is dark and a real snowfall is bright, and neither should trip the pixel checks. Judging whether 400 particles is too many for the weather is the model's density score, not arithmetic.
+The three controls are there to catch false positives. A real storm is dark and a real snowfall is bright, and neither should trip the pixel checks. Whether 400 particles is too many for the weather is left to the model's density score, because no arithmetic on the pixels can answer it.
 
-Frames come from a seeded random source, so every run sees the same pixels, and are encoded the way the browser does it (JPEG quality 0.8, stepping down if over 150 KB) and decoded by the same code as `/api/critique`.
+The frames come from a seeded random source, so every run sees the same pixels. They are encoded the way the browser does it, as JPEG at quality 0.8, stepping down if the file is over 150 KB, and decoded by the same code that `/api/critique` uses.
 
 ## Running
 
@@ -24,10 +24,10 @@ npm run eval:critic              # offline: pixel checks only, free
 node --env-file=.env.local --import tsx evals/critic-bad-frames/run.ts --live
 ```
 
-`--live` sends the five frames with an expected verdict to the critic model (`WEATHER_MOOD_CRITIC_MODEL`, default `claude-sonnet-5-5`). It prints an estimate first (about 9 cents) and the actual cost from token usage at the end. The offline half also runs in CI as part of `vitest`.
+With `--live`, the five frames that have an expected verdict also go to the critic model (`WEATHER_MOOD_CRITIC_MODEL`, default `claude-sonnet-5-5`). The script prints an estimated cost before it starts, about 9 cents, and the actual cost from token usage when it finishes. The offline part also runs in CI as part of `vitest`.
 
 ## Results
 
-Offline: 8 of 8 frames get their expected pixel verdict.
+Offline, 8 of 8 frames get their expected pixel verdict.
 
-Live: pending. Nobody has run `--live` yet. Expect the good frame to be the hard case: it is a plain synthetic gradient, so the critic may fairly mark it down on city flavour.
+Nobody has run `--live` yet, so there is no live result. When someone does, the good frame is likely to be the hard case. It is a plain synthetic gradient with nothing of any particular city in it, and the critic would be fair to mark it down for that.

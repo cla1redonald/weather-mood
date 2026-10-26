@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Weather Mood",
-  description: "A full-screen generative art experience driven by real weather data. Feel the atmosphere with procedural visuals, synthesized audio, and AI-generated poetry.",
+  description: "Pick a city and watch its live weather painted as moving generative art, with a poem written for the place and read aloud over music.",
 };
 
 export default function RootLayout({
