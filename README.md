@@ -4,7 +4,7 @@ Pick a city and Weather Mood paints the weather there right now as a full-screen
 
 Try it at [weather-mood-chi.vercel.app](https://weather-mood-chi.vercel.app).
 
-![The Weather Mood social card, captioned "Generative art driven by real-time weather"](assets/social-preview.png)
+![The Weather Mood social card, with rain, snow and rising light across a twilight canvas and the caption "Pick a city and Weather Mood paints the weather there right now"](assets/social-preview.png)
 
 ## What you will see
 
@@ -102,6 +102,7 @@ npm run dev                  # http://localhost:3000
 - `npm run lint` runs ESLint
 - `npm run typecheck` runs TypeScript
 - `npm test` runs Vitest (`npx vitest run` for a single pass)
+- `npm run social-card` redraws `assets/social-preview.png` from `scripts/social-card/card.html`. It needs Playwright's Chromium, which `npx playwright install chromium` fetches once.
 - `npm run eval:critic` runs the critic eval offline. Add `-- --live` to include the model, which costs money.
 - `node --env-file=.env.local --import tsx scripts/probe-critique-schema.mts` runs one live critique for each critic model and prints the outcome, elapsed seconds, scores, adjustments and usage. It costs under 2 cents.
 
